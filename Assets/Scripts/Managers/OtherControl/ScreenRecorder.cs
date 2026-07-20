@@ -123,20 +123,44 @@ public class ScreenRecorder : MonoBehaviour
         var height = Screen.height;
         var frameDuration = 1.0 / fps;
         var recordingElapsedTime = 0.0;
+        long videoFramePts = 0;
         var outputSucceeded = false;
-        var pendingReadbacks = new Queue<VideoReadbackSlot>(ReadbackSlotCount);
-        var pendingEncodes = new Queue<VideoReadbackSlot>(ReadbackSlotCount);
-        var availableSlots = new Stack<VideoReadbackSlot>(ReadbackSlotCount);
+        Queue<VideoReadbackSlot> pendingReadbacks = null;
+        Queue<VideoReadbackSlot> pendingEncodes = null;
+        Stack<VideoReadbackSlot> availableSlots = null;
+        IScreenRecorderBackend recorderBackend = null;
+        RenderTexture nativeCaptureTarget = null;
 
         try
         {
-            for (var i = 0; i < ReadbackSlotCount; i++)
-                availableSlots.Push(new VideoReadbackSlot(width, height));
-
             var outPath = Path.Combine(maidataPath, finalName);
             if (File.Exists(outPath)) File.Delete(outPath);
-            FFmpegMediaEncoder.Initialize(outPath, width, height, fps,
-                _audioManager.SampleRate, _audioManager.Channels);
+
+            var backendConfig = new ScreenRecorderBackendConfig(
+                outPath,
+                width,
+                height,
+                fps,
+                _audioManager.SampleRate,
+                _audioManager.Channels,
+                RenderTextureFormat.ARGB32);
+            recorderBackend = ScreenRecorderBackendFactory.CreatePreferredBackend(backendConfig);
+            ScreenRecorderBackendHub.SetCurrent(recorderBackend);
+
+            if (recorderBackend.UsesNativeTextureInput)
+            {
+                nativeCaptureTarget = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32);
+                if (!nativeCaptureTarget.Create())
+                    throw new InvalidOperationException("Could not create the native video capture render target.");
+            }
+            else
+            {
+                pendingReadbacks = new Queue<VideoReadbackSlot>(ReadbackSlotCount);
+                pendingEncodes = new Queue<VideoReadbackSlot>(ReadbackSlotCount);
+                availableSlots = new Stack<VideoReadbackSlot>(ReadbackSlotCount);
+                for (var i = 0; i < ReadbackSlotCount; i++)
+                    availableSlots.Push(new VideoReadbackSlot(width, height));
+            }
 
             onStart?.Invoke();
             _audioManager.BeginRecordingAudio(_timeProvider.AudioTime, _timeProvider.CurrentSpeed);
@@ -147,48 +171,62 @@ public class ScreenRecorder : MonoBehaviour
                 var frameEndTime = recordingElapsedTime + frameDuration;
                 _audioManager.UpdateRecordingAudioFrame(recordingElapsedTime, frameEndTime);
 
-                FFmpegMediaEncoder.ThrowIfEncodingFailed();
-                DrainCompletedVideoEncodes(pendingEncodes, availableSlots);
-                DrainReadyVideoFrames(
-                    pendingReadbacks,
-                    pendingEncodes,
-                    availableSlots);
+                recorderBackend.ThrowIfFailed();
 
-                // Apply backpressure before reusing memory still owned by the
-                // GPU or the encoding worker.
-                if (availableSlots.Count == 0)
+                if (recorderBackend.UsesNativeTextureInput)
                 {
-                    if (pendingReadbacks.Count > 0)
+                    ScreenCapture.CaptureScreenshotIntoRenderTexture(nativeCaptureTarget);
+                    recorderBackend.SubmitTextureFrame(
+                        nativeCaptureTarget.GetNativeTexturePtr(),
+                        videoFramePts++);
+                }
+                else
+                {
+                    DrainCompletedVideoEncodes(recorderBackend, pendingEncodes, availableSlots);
+                    DrainReadyVideoFrames(
+                        recorderBackend,
+                        pendingReadbacks,
+                        pendingEncodes,
+                        availableSlots);
+
+                    // Apply backpressure before reusing memory still owned by the
+                    // GPU or the encoding worker.
+                    if (availableSlots.Count == 0)
                     {
-                        QueueOldestVideoFrame(
-                            pendingReadbacks,
+                        if (pendingReadbacks.Count > 0)
+                        {
+                            QueueOldestVideoFrame(
+                                recorderBackend,
+                                pendingReadbacks,
+                                pendingEncodes,
+                                availableSlots,
+                                true);
+                        }
+
+                        ReclaimOldestEncodedVideoFrame(
+                            recorderBackend,
                             pendingEncodes,
                             availableSlots,
                             true);
                     }
 
-                    ReclaimOldestEncodedVideoFrame(
-                        pendingEncodes,
-                        availableSlots,
-                        true);
-                }
-
-                var slot = availableSlots.Pop();
-                try
-                {
-                    ScreenCapture.CaptureScreenshotIntoRenderTexture(slot.Target);
-                    slot.Request = AsyncGPUReadback.RequestIntoNativeArray(
-                        ref slot.Buffer,
-                        slot.Target,
-                        0,
-                        TextureFormat.RGBA32,
-                        null);
-                    pendingReadbacks.Enqueue(slot);
-                }
-                catch
-                {
-                    availableSlots.Push(slot);
-                    throw;
+                    var slot = availableSlots.Pop();
+                    try
+                    {
+                        ScreenCapture.CaptureScreenshotIntoRenderTexture(slot.Target);
+                        slot.Request = AsyncGPUReadback.RequestIntoNativeArray(
+                            ref slot.Buffer,
+                            slot.Target,
+                            0,
+                            TextureFormat.RGBA32,
+                            null);
+                        pendingReadbacks.Enqueue(slot);
+                    }
+                    catch
+                    {
+                        availableSlots.Push(slot);
+                        throw;
+                    }
                 }
 
                 recordingElapsedTime = frameEndTime;
@@ -196,23 +234,27 @@ public class ScreenRecorder : MonoBehaviour
 
             _audioManager.EndRecordingAudio((float)recordingElapsedTime);
 
-            while (pendingReadbacks.Count > 0)
+            while (pendingReadbacks != null && pendingReadbacks.Count > 0)
             {
                 QueueOldestVideoFrame(
+                    recorderBackend,
                     pendingReadbacks,
                     pendingEncodes,
                     availableSlots,
                     true);
             }
-            while (pendingEncodes.Count > 0)
+            while (pendingEncodes != null && pendingEncodes.Count > 0)
             {
                 ReclaimOldestEncodedVideoFrame(
+                    recorderBackend,
                     pendingEncodes,
                     availableSlots,
                     true);
             }
 
-            FFmpegMediaEncoder.Dispose();
+            recorderBackend.Dispose();
+            ScreenRecorderBackendHub.ClearCurrent(recorderBackend);
+            recorderBackend = null;
             outputSucceeded = true;
         }
         catch (Exception e)
@@ -225,8 +267,12 @@ public class ScreenRecorder : MonoBehaviour
             IsRecording = false;
             try
             {
-                if (FFmpegMediaEncoder.IsInitialized)
-                    FFmpegMediaEncoder.Dispose();
+                if (recorderBackend != null)
+                {
+                    recorderBackend.Dispose();
+                    ScreenRecorderBackendHub.ClearCurrent(recorderBackend);
+                    recorderBackend = null;
+                }
             }
             catch (Exception ex)
             {
@@ -238,25 +284,31 @@ public class ScreenRecorder : MonoBehaviour
             // 剩下的
 
             // Do not release render targets or NativeArrays while the GPU owns them.
-            while (pendingReadbacks.Count > 0)
+            while (pendingReadbacks != null && pendingReadbacks.Count > 0)
             {
                 var slot = pendingReadbacks.Dequeue();
                 if (!slot.Request.done) slot.Request.WaitForCompletion();
                 availableSlots.Push(slot);
             }
-            while (pendingEncodes.Count > 0)
+            while (pendingEncodes != null && pendingEncodes.Count > 0)
             {
                 var slot = pendingEncodes.Dequeue();
                 slot.EncodingCompleted.Wait();
                 availableSlots.Push(slot);
             }
-            while (availableSlots.Count > 0)
+            while (availableSlots != null && availableSlots.Count > 0)
             {
                 var slot = availableSlots.Pop();
                 if (slot.Buffer.IsCreated) slot.Buffer.Dispose();
                 slot.EncodingCompleted.Dispose();
                 slot.Target.Release();
                 Destroy(slot.Target);
+            }
+
+            if (nativeCaptureTarget != null)
+            {
+                nativeCaptureTarget.Release();
+                Destroy(nativeCaptureTarget);
             }
 
             _audioManager.ReleaseRecordingAudio();
@@ -269,11 +321,13 @@ public class ScreenRecorder : MonoBehaviour
     }
 
     private static void DrainReadyVideoFrames(
+        IScreenRecorderBackend recorderBackend,
         Queue<VideoReadbackSlot> requests,
         Queue<VideoReadbackSlot> pendingEncodes,
         Stack<VideoReadbackSlot> availableSlots)
     {
         while (QueueOldestVideoFrame(
+                   recorderBackend,
                    requests,
                    pendingEncodes,
                    availableSlots,
@@ -283,6 +337,7 @@ public class ScreenRecorder : MonoBehaviour
     }
 
     private static bool QueueOldestVideoFrame(
+        IScreenRecorderBackend recorderBackend,
         Queue<VideoReadbackSlot> requests,
         Queue<VideoReadbackSlot> pendingEncodes,
         Stack<VideoReadbackSlot> availableSlots,
@@ -306,7 +361,7 @@ public class ScreenRecorder : MonoBehaviour
                 throw new InvalidOperationException(
                     "Async GPU readback failed while recording a video frame.");
 
-            FFmpegMediaEncoder.QueueVideoFrame(
+            recorderBackend.QueueCpuVideoFrame(
                 slot.Buffer,
                 slot.EncodingCompleted);
             pendingEncodes.Enqueue(slot);
@@ -320,10 +375,12 @@ public class ScreenRecorder : MonoBehaviour
     }
 
     private static void DrainCompletedVideoEncodes(
+        IScreenRecorderBackend recorderBackend,
         Queue<VideoReadbackSlot> pendingEncodes,
         Stack<VideoReadbackSlot> availableSlots)
     {
         while (ReclaimOldestEncodedVideoFrame(
+                   recorderBackend,
                    pendingEncodes,
                    availableSlots,
                    false))
@@ -332,6 +389,7 @@ public class ScreenRecorder : MonoBehaviour
     }
 
     private static bool ReclaimOldestEncodedVideoFrame(
+        IScreenRecorderBackend recorderBackend,
         Queue<VideoReadbackSlot> pendingEncodes,
         Stack<VideoReadbackSlot> availableSlots,
         bool waitForCompletion)
@@ -349,7 +407,7 @@ public class ScreenRecorder : MonoBehaviour
 
         pendingEncodes.Dequeue();
         availableSlots.Push(slot);
-        FFmpegMediaEncoder.ThrowIfEncodingFailed();
+        recorderBackend.ThrowIfFailed();
         return true;
     }
 

@@ -527,7 +527,7 @@ public class AudioManager
 
         // Buffer ownership stays here. ScreenRecorder supplies only timestamps;
         // AudioManager submits the immutable NativeArray range to the encoder.
-        FFmpegMediaEncoder.WriteAudioSamples(
+        ScreenRecorderBackendHub.WriteAudioSamples(
             recordingBuffer,
             recordingCommittedSampleCount,
             targetSampleCount - recordingCommittedSampleCount);
