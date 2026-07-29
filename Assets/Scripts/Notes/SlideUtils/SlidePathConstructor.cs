@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MajdataViewX.Base;
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -24,7 +25,7 @@ namespace Notes.SlideUtils
             };
             return obj;
         }
-        
+
         /// <summary>
         /// 从指定按键开始构造 slide 路径
         /// </summary>
@@ -34,7 +35,7 @@ namespace Notes.SlideUtils
         {
             return BeginAt(MajGeometry.GetPoint(sensorIdx));
         }
-        
+
         /// <summary>
         /// <p>为上一个路径片段添加控制箭头对齐的标志</p>
         /// </summary>
@@ -64,6 +65,24 @@ namespace Notes.SlideUtils
         public SlidePathConstructor LineToPoint(int sensorIdx)
         {
             return LineToPoint(MajGeometry.GetPoint(sensorIdx));
+        }
+
+        /// <summary>
+        /// <p>从当前端点添加一条以指定点为极点的对数螺线</p>
+        /// </summary>
+        /// <param name="endPoint">终点</param>
+        /// <param name="pole">极点</param>
+        /// <param name="isCcw">true 为逆时针绕行</param>
+        /// <returns><c>this</c></returns>
+        public SlidePathConstructor LogarithmicSpiralTo(
+            Complex endPoint,
+            Complex pole,
+            bool isCcw)
+        {
+            var segment = new LogarithmicSpiralSegment(CurrentEndPoint, endPoint, pole, isCcw);
+            PathSegments.Add(segment);
+            CurrentEndPoint = endPoint;
+            return this;
         }
 
         /// <summary>
@@ -108,7 +127,7 @@ namespace Notes.SlideUtils
                     if (skipIfZero) return this;
                     endRad += 2 * Math.PI;
                 }
-                
+
                 if (startRad > endRad)
                 {
                     startRad -= 2 * Math.PI;
@@ -121,13 +140,13 @@ namespace Notes.SlideUtils
                     if (skipIfZero) return this;
                     endRad -= 2 * Math.PI;
                 }
-                
+
                 if (startRad < endRad)
                 {
                     startRad += 2 * Math.PI;
                 }
             }
-        
+
             var seg = new ArcSegment(circle, startRad, endRad);
             PathSegments.Add(seg);
             CurrentEndPoint = seg.GetPointAt(1f);
@@ -145,9 +164,9 @@ namespace Notes.SlideUtils
         /// <returns><c>this</c></returns>
         public SlidePathConstructor ArcToAngle(int circleIdx, double endRad, bool isCcw, bool skipIfZero)
         {
-            return  ArcToAngle(MajGeometry.GetCircle(circleIdx).Center, endRad, isCcw, skipIfZero);
+            return ArcToAngle(MajGeometry.GetCircle(circleIdx).Center, endRad, isCcw, skipIfZero);
         }
-        
+
         /// <summary>
         /// <p>添加一条沿指定圆心绕行的圆弧，直到恰好达到前往指定目标点的切点</p>
         /// </summary>

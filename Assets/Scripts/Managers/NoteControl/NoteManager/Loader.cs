@@ -1043,7 +1043,7 @@ public partial class NoteManager
                     if (lastKey != -1 && lastShape != string.Empty)
                     {
                         var shape = $"{lastKey}{lastShape.ToString()}{curKey}";
-                        slideMetadatas.Add(SlideTableNeo.MakeCustomSlide(shape));
+                        slideMetadatas.Add(SlideTableNeo.GetCustomSlide(shape));
                         lastShape = string.Empty;
                     }
                     lastKey = curKey;

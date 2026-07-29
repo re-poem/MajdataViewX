@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MajdataViewX.Base;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -211,6 +212,112 @@ namespace Notes.SlideUtils
     }
 
     /// <summary>
+    /// <p>以指定点为极点，连接起点和终点的对数螺线片段</p>
+    /// <p>按照指定方向连接；起终点位于同一辐角时绕行一整圈</p>
+    /// <p>起终点半径相等时退化为圆弧</p>
+    /// </summary>
+    public class LogarithmicSpiralSegment : PathSegment
+    {
+        public readonly Complex StartPoint;
+        public readonly Complex EndPoint;
+        public readonly Complex Pole;
+        public readonly bool IsCcw;
+
+        private readonly double _startRadius;
+        private readonly double _endRadius;
+        private readonly double _startRadian;
+        private readonly double _radianDelta;
+        private readonly double _logRadiusRatio;
+        private readonly Complex _unitTangentFactor;
+        private readonly double _segmentLength;
+
+        public LogarithmicSpiralSegment(
+            Complex startPoint,
+            Complex endPoint,
+            Complex pole,
+            bool isCcw)
+        {
+            StartPoint = startPoint;
+            EndPoint = endPoint;
+            Pole = pole;
+            IsCcw = isCcw;
+
+            var startVector = startPoint - pole;
+            var endVector = endPoint - pole;
+            _startRadius = startVector.Magnitude;
+            _endRadius = endVector.Magnitude;
+            if (_startRadius == 0.0 || _endRadius == 0.0)
+            {
+                throw new ArgumentException("A logarithmic spiral cannot start or end at its pole.");
+            }
+
+            _startRadian = startVector.Phase;
+            _radianDelta = endVector.Phase - _startRadian;
+            if (isCcw)
+            {
+                while (_radianDelta <= 0.0) _radianDelta += Math.PI * 2.0;
+            }
+            else
+            {
+                while (_radianDelta >= 0.0) _radianDelta -= Math.PI * 2.0;
+            }
+
+            _logRadiusRatio = Math.Log(_endRadius / _startRadius);
+
+            // 令 v 从 0 变化到 1，则
+            // z(v) = r0 * exp((log(r1/r0) + i * deltaAngle) * v)。
+            // z'(v) 中与方向有关的常量因子就是下面这个复数。
+            var tangentFactor = new Complex(_logRadiusRatio, _radianDelta);
+            _unitTangentFactor = tangentFactor / tangentFactor.Magnitude;
+
+            // ∫|z'(v)|dv = hypot(log(r1/r0), deltaAngle) * L(r0, r1)，
+            // 其中 L 是两个半径的对数平均。
+            var logarithmicMeanRadius = Math.Abs(_logRadiusRatio) < 1e-8
+                ? (_startRadius + _endRadius) / 2.0
+                : (_endRadius - _startRadius) / _logRadiusRatio;
+            _segmentLength = tangentFactor.Magnitude * logarithmicMeanRadius;
+        }
+
+        public override bool IsCurve => true;
+
+        private double GetSpiralParameterAt(double t)
+        {
+            if (_logRadiusRatio == 0.0)
+            {
+                return t;
+            }
+
+            // 对数螺线从起点到任意半径的弧长与半径差成正比，
+            // 所以先按 t 线性插值半径，再反解螺线参数，便可保证等弧长插值。
+            var radius = _startRadius + (_endRadius - _startRadius) * t;
+            return Math.Log(radius / _startRadius) / _logRadiusRatio;
+        }
+
+        public override Complex GetPointAt(double t)
+        {
+            if (t == 0.0) return StartPoint;
+            if (t == 1.0) return EndPoint;
+
+            var v = GetSpiralParameterAt(t);
+            var radius = _startRadius + (_endRadius - _startRadius) * t;
+            var radian = _startRadian + _radianDelta * v;
+            return Pole + Complex.FromPolarCoordinates(radius, radian);
+        }
+
+        public override Complex GetTangentAt(double t)
+        {
+            var v = GetSpiralParameterAt(t);
+            var radian = _startRadian + _radianDelta * v;
+            return Complex.FromPolarCoordinates(1.0, radian) * _unitTangentFactor;
+        }
+
+        public override double GetSegmentLength()
+        {
+            return _segmentLength;
+        }
+    }
+
+    /// <summary>
     /// <p>参数化的 slide 路径曲线</p>
     /// </summary>
     public class ParametricSlidePath
@@ -306,7 +413,7 @@ namespace Notes.SlideUtils
         /// <p>计算路径总长</p>
         /// </summary>
         public double GetPathLength() => AccumulatedLengths[^1];
-        
+
         /// <summary>
         /// 是否关于“A1 - C - A5”反射路径
         /// </summary>
@@ -315,7 +422,7 @@ namespace Notes.SlideUtils
         /// 顺时针旋转路径，多少个 45 度
         /// </summary>
         public int Rotated45CW { get; private set; } = 0;
-        
+
         private Complex _rotor = Complex.One;
 
         /// <summary>
@@ -357,7 +464,7 @@ namespace Notes.SlideUtils
             var segment = GetSegmentAt(t, out var segT);
             return CalcRotoreflection(segment.GetTangentAt(segT));
         }
-        
+
         public virtual SlideEndShape GetEndShape()
         {
             var lastSegment = Segments[^1];
@@ -369,6 +476,13 @@ namespace Notes.SlideUtils
             if (lastSegment is ArcSegment arc)
             {
                 return (arc.EndRadian > arc.StartRadian) != Reflected ? SlideEndShape.CircleCCW : SlideEndShape.CircleCW;
+            }
+
+            if (lastSegment is LogarithmicSpiralSegment spiral && spiral.IsCurve)
+            {
+                return spiral.IsCcw != Reflected
+                    ? SlideEndShape.CircleCCW
+                    : SlideEndShape.CircleCW;
             }
 
             return SlideEndShape.Straight;
