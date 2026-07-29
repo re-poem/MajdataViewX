@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MajdataViewX.Base;
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -132,7 +133,7 @@ namespace Notes.SlideUtils
         public static readonly Dictionary<int, SlideAreaRawData[]> SlideAreaLookup = new();
 
         /// <summary>
-        /// 初始化判定区探测算法，给<c>HitAreasLookup</c>打表
+        /// 初始化判定区探测算法，给<c>SlideAreaLookup</c>打表
         /// </summary>
         public static void InitializeSlideAreaLookup()
         {
@@ -160,26 +161,26 @@ namespace Notes.SlideUtils
                 // 相隔 3/4/5 个键位的 A 区不可能直接到达而不接触其他判定区
                 case 1:
                 case 7:
-                {
-                    SlideAreaLookup[key] = new[]
                     {
+                        SlideAreaLookup[key] = new[]
+                        {
                         new SlideAreaRawData(0.32, 0.68, i),
                         new SlideAreaRawData(1.00, 1.00, j)
                     };
-                    break;
-                }
+                        break;
+                    }
                 case 2:
                 case 6:
-                {
-                    tmp = (diff == 2) ? (i + 1) & 7 : (i - 1) & 7;
-                    SlideAreaLookup[key] = new[]
                     {
+                        tmp = (diff == 2) ? (i + 1) & 7 : (i - 1) & 7;
+                        SlideAreaLookup[key] = new[]
+                        {
                         new SlideAreaRawData(0.20, 0.38, i),
                         new SlideAreaRawData(0.62, 0.80, tmp, tmp | 8),
                         new SlideAreaRawData(1.00, 1.00, j)
                     };
-                    break;
-                }
+                        break;
+                    }
             }
 
             // Bi -> Bj
@@ -190,40 +191,40 @@ namespace Notes.SlideUtils
                 // 相隔 4 个键位的 B 区之间必然经过 C 区
                 case 1:
                 case 7:
-                {
-                    SlideAreaLookup[key] = new[]
                     {
+                        SlideAreaLookup[key] = new[]
+                        {
                         new SlideAreaRawData(0.35, 0.65, i | 8),
                         new SlideAreaRawData(1.00, 1.00, j | 8)
                     };
-                    break;
-                }
+                        break;
+                    }
                 case 2:
                 case 6:
-                {
-                    tmp = (diff == 2) ? (i + 1) & 7 : (i - 1) & 7;
-                    SlideAreaLookup[key] = new[]
                     {
+                        tmp = (diff == 2) ? (i + 1) & 7 : (i - 1) & 7;
+                        SlideAreaLookup[key] = new[]
+                        {
                         new SlideAreaRawData(0.22, 0.40, i | 8),
                         new SlideAreaRawData(0.60, 0.78, tmp | 8, 16),
                         new SlideAreaRawData(1.00, 1.00, j | 8)
                     };
-                    break;
-                }
+                        break;
+                    }
                 case 3:
                 case 5:
-                {
-                    tmp = (diff == 3) ? (i + 1) & 7 : (i - 1) & 7;
-                    tmp2 = (diff == 3) ? (i + 2) & 7 : (i - 2) & 7;
-                    SlideAreaLookup[key] = new[]
                     {
+                        tmp = (diff == 3) ? (i + 1) & 7 : (i - 1) & 7;
+                        tmp2 = (diff == 3) ? (i + 2) & 7 : (i - 2) & 7;
+                        SlideAreaLookup[key] = new[]
+                        {
                         new SlideAreaRawData(0.15, 0.28, i | 8),
                         new SlideAreaRawData(0.43, 0.57, tmp | 8, 16),
                         new SlideAreaRawData(0.72, 0.85, tmp2 | 8, 16),
                         new SlideAreaRawData(1.00, 1.00, j | 8)
                     };
-                    break;
-                }
+                        break;
+                    }
             }
 
             // Ai <-> Bj
@@ -233,56 +234,56 @@ namespace Notes.SlideUtils
             {
                 // 2/4/6 是不可能的，剩下 0/1/3/5/7
                 case 0:
-                {
-                    SlideAreaLookup[key] = new[]
                     {
+                        SlideAreaLookup[key] = new[]
+                        {
                         new SlideAreaRawData(0.50, 0.80, i),
                         new SlideAreaRawData(1.00, 1.00, j | 8)
                     };
-                    SlideAreaLookup[key2] = new[]
-                    {
+                        SlideAreaLookup[key2] = new[]
+                        {
                         new SlideAreaRawData(0.20, 0.50, j | 8),
                         new SlideAreaRawData(1.00, 1.00, i)
                     };
-                    break;
-                }
+                        break;
+                    }
                 case 1:
                 case 7:
-                {
-                    SlideAreaLookup[key] = new[]
                     {
+                        SlideAreaLookup[key] = new[]
+                        {
                         new SlideAreaRawData(0.45, 0.77, i),
                         new SlideAreaRawData(1.00, 1.00, j | 8)
                     };
-                    SlideAreaLookup[key2] =
-                        new[]
-                        {
+                        SlideAreaLookup[key2] =
+                            new[]
+                            {
                             new SlideAreaRawData(0.23, 0.55, j | 8),
                             new SlideAreaRawData(1.00, 1.00, i)
-                        };
-                    break;
-                }
+                            };
+                        break;
+                    }
                 case 3:
                 case 5:
-                {
-                    tmp = (diff == 3) ? (i + 1) & 7 : (i - 1) & 7;
-                    tmp2 = (diff == 3) ? (i + 2) & 7 : (i - 2) & 7;
-                    SlideAreaLookup[key] = new[]
                     {
+                        tmp = (diff == 3) ? (i + 1) & 7 : (i - 1) & 7;
+                        tmp2 = (diff == 3) ? (i + 2) & 7 : (i - 2) & 7;
+                        SlideAreaLookup[key] = new[]
+                        {
                         new SlideAreaRawData(0.20, 0.34, i),
                         new SlideAreaRawData(0.54, 0.67, i | 8, tmp | 8),
                         new SlideAreaRawData(0.80, 0.90, tmp2 | 8, 16),
                         new SlideAreaRawData(1.00, 1.00, j | 8)
                     };
-                    SlideAreaLookup[key2] = new[]
-                    {
+                        SlideAreaLookup[key2] = new[]
+                        {
                         new SlideAreaRawData(0.10, 0.20, j | 8),
                         new SlideAreaRawData(0.33, 0.46, tmp2 | 8, 16),
                         new SlideAreaRawData(0.66, 0.80, i | 8, tmp | 8),
                         new SlideAreaRawData(1.00, 1.00, i)
                     };
-                    break;
-                }
+                        break;
+                    }
             }
 
             // C <-> Bj
@@ -451,7 +452,7 @@ namespace Notes.SlideUtils
             var lastArea = result[^1];
             result[^2] = new SlideAreaRawData(last2ndArea.LengthAfterPush, totalLength - lastDistance,
                 last2ndArea.SensorA, last2ndArea.SensorB);
-            result[^1] = new SlideAreaRawData(totalLength, totalLength, lastArea.SensorA,  lastArea.SensorB);
+            result[^1] = new SlideAreaRawData(totalLength, totalLength, lastArea.SensorA, lastArea.SensorB);
 
             return result.ToArray();
         }

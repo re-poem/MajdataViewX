@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MajdataViewX.Base;
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -63,7 +64,7 @@ namespace Notes.SlideUtils
         WifiU,
         WifiD,
     }
-    
+
     public enum SlideFlag
     {
         None,
@@ -252,7 +253,7 @@ namespace Notes.SlideUtils
             var arrowIdx = 1;
             var lastLength = 0.0;
             var firstAreaMinIdx = 2;    // 第一个区至少删两个箭头
-            var finalAreaMaxIdx = conditionalLastArrow? arrowCount - 7 : arrowCount - 6;  // 最后一个区至少留四个箭头
+            var finalAreaMaxIdx = conditionalLastArrow ? arrowCount - 7 : arrowCount - 6;  // 最后一个区至少留四个箭头
             SensorType sensorA;
             SensorType sensorB;
             for (var i = 0; i <= areaRawData.Length - 2; i++) // 最后一个判定段要特殊处理
@@ -261,12 +262,12 @@ namespace Notes.SlideUtils
                 while (arrowRawData[arrowIdx].PathLength <= targetLength) arrowIdx++;
                 lastLength = areaRawData[i].LengthAfterPush;
                 var push = Math.Max(arrowIdx - 1, firstAreaMinIdx);   // 扣掉本来就不显示的路径起点
-                
+
                 targetLength = lastLength + 0.33 * (areaRawData[i].LengthAfterFinish - lastLength);
                 while (arrowRawData[arrowIdx].PathLength <= targetLength) arrowIdx++;
                 var finish = Math.Min(arrowIdx - 1, finalAreaMaxIdx);   // 扣掉本来就不显示的路径起点
                 lastLength = areaRawData[i].LengthAfterFinish;
-                
+
                 sensorA = (SensorType)areaRawData[i].SensorA;
                 sensorB = (SensorType)areaRawData[i].SensorB;
                 areaList.Add(new SlideArea(push, finish, sensorA, sensorB));
@@ -406,6 +407,13 @@ namespace Notes.SlideUtils
         /// <remarks>没有做任何参数校验，获取前记得初始化</remarks>
         public static SlideMetadata GetWifiSlide(string key) => WIFI_TABLE[key];
 
+        /// <summary>用 slide-code 直接生成一条完整的自定义 slide</summary>
+        public static SlideMetadata GetCustomSlide(string slideCode)
+        {
+            var path = SlideCodeParser.Parse(slideCode);
+            return CreateSlideEntry(path);
+        }
+
         /// <summary>把多条 slide 直接拼接成一条 conn-slide，然后就可以和单一 slide 一样处理了</summary>
         /// <remarks>没有做任何 wifi 的特判，如果待连接的 slide 里有 wifi 是 UB</remarks>
         public static SlideMetadata MakeConnSlide(IList<SlideMetadata> slides)
@@ -480,13 +488,6 @@ namespace Notes.SlideUtils
                 lastSlide.OkType,
                 SlideFlag.None
                 );
-        }
-
-        /// <summary>用 slide-code 直接生成一条完整的自定义 slide</summary>
-        public static SlideMetadata MakeCustomSlide(string slideCode)
-        {
-            var path = SlideCodeParser.Parse(slideCode);
-            return CreateSlideEntry(path);
         }
 
         // ReSharper disable once InconsistentNaming
