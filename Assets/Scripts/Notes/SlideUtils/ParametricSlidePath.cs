@@ -215,6 +215,7 @@ namespace Notes.SlideUtils
     /// <p>以指定点为极点，连接起点和终点的对数螺线片段</p>
     /// <p>按照指定方向连接；起终点位于同一辐角时绕行一整圈</p>
     /// <p>起终点半径相等时退化为圆弧</p>
+    /// <p>起终点有一个为极点时固定绕行一整圈</p>
     /// </summary>
     public class LogarithmicSpiralSegment : PathSegment
     {
@@ -246,23 +247,41 @@ namespace Notes.SlideUtils
             var endVector = endPoint - pole;
             _startRadius = startVector.Magnitude;
             _endRadius = endVector.Magnitude;
-            if (_startRadius == 0.0 || _endRadius == 0.0)
+            
+            if (_startRadius <= MajGeometry.Epsilon && _endRadius <= MajGeometry.Epsilon)
             {
-                throw new ArgumentException("A logarithmic spiral cannot start or end at its pole.");
+                throw new ArgumentException("A logarithmic spiral cannot start and end at its pole.");
             }
-
+            
+            // 钳制半径，避免除零和无限对数
+            if (_startRadius <= MajGeometry.Epsilon)
+            {
+                _startRadius = MajGeometry.Epsilon;
+                startVector = Complex.FromPolarCoordinates(_startRadius, endVector.Phase);
+            }
+            if (_endRadius <= MajGeometry.Epsilon)
+            {
+                _endRadius = MajGeometry.Epsilon;
+                endVector = Complex.FromPolarCoordinates(_endRadius, startVector.Phase);
+            }
+            
             _startRadian = startVector.Phase;
-            _radianDelta = endVector.Phase - _startRadian;
+            _radianDelta = endVector.Phase - _startRadian;  // -2 * PI ~ +2 * PI
+            
             if (isCcw)
             {
-                while (_radianDelta <= 0.0) _radianDelta += Math.PI * 2.0;
+                if (_radianDelta <= MajGeometry.EpsilonRad) _radianDelta += Math.PI * 2.0;
             }
             else
             {
-                while (_radianDelta >= 0.0) _radianDelta -= Math.PI * 2.0;
+                if (_radianDelta >= -MajGeometry.EpsilonRad) _radianDelta -= Math.PI * 2.0;
             }
 
             _logRadiusRatio = Math.Log(_endRadius / _startRadius);
+            if (Math.Abs(_logRadiusRatio) < 0.001)
+            {
+                _logRadiusRatio = 0.0;
+            }
 
             // 令 v 从 0 变化到 1，则
             // z(v) = r0 * exp((log(r1/r0) + i * deltaAngle) * v)。
@@ -272,7 +291,7 @@ namespace Notes.SlideUtils
 
             // ∫|z'(v)|dv = hypot(log(r1/r0), deltaAngle) * L(r0, r1)，
             // 其中 L 是两个半径的对数平均。
-            var logarithmicMeanRadius = Math.Abs(_logRadiusRatio) < 1e-8
+            var logarithmicMeanRadius = _logRadiusRatio == 0.0
                 ? (_startRadius + _endRadius) / 2.0
                 : (_endRadius - _startRadius) / _logRadiusRatio;
             _segmentLength = tangentFactor.Magnitude * logarithmicMeanRadius;
@@ -295,8 +314,8 @@ namespace Notes.SlideUtils
 
         public override Complex GetPointAt(double t)
         {
-            if (t == 0.0) return StartPoint;
-            if (t == 1.0) return EndPoint;
+            if (t <= 0.0) return StartPoint;
+            if (t >= 1.0) return EndPoint;
 
             var v = GetSpiralParameterAt(t);
             var radius = _startRadius + (_endRadius - _startRadius) * t;

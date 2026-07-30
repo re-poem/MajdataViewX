@@ -314,7 +314,34 @@ namespace Notes.SlideUtils
         public const double LastDistanceCircle = MajGeometry.MainRadius * 175.0 / 480.0;
         public const double LastDistanceShort = MajGeometry.MainRadius * 130.0 / 480.0;
         public const double LastDistanceLong = MajGeometry.MainRadius * 159.0 / 480.0;
+        public const double LastDistanceNonA = MajGeometry.MainRadius * 100.0 / 480.0;
 
+        
+        public static int? TryGetNode(Complex point)
+        {
+            // 检查是否落在某个判定区的中心领域内
+            if (point.Magnitude < HitAreaCRadius)
+            {
+                return 16;
+            }
+
+            for (var j = 0; j < 8; j++)
+            {
+                var phi = Math.PI * (3.0 / 8.0 - j / 4.0);
+                if ((point - Complex.FromPolarCoordinates(HitAreaADistance, phi)).Magnitude < HitAreaARadius)
+                {
+                    return j;
+                }
+
+                if ((point - Complex.FromPolarCoordinates(HitAreaBDistance, phi)).Magnitude < HitAreaBRadius)
+                {
+                    return j | 8;
+                }
+            }
+
+            return null;
+        }
+        
         /// <summary>
         /// 计算指定 slide 路径的判定区序列
         /// </summary>
@@ -335,29 +362,7 @@ namespace Notes.SlideUtils
                 // 计算现在的位置
                 var t = (double)i / count;
                 var pt = path.GetPointAt(t);
-                int? node = null;
-
-                // 检查是否落在某个判定区的中心领域内
-                if (pt.Magnitude < HitAreaCRadius)
-                {
-                    node = 16;
-                }
-                else
-                    for (var j = 0; j < 8; j++)
-                    {
-                        var phi = Math.PI * (3.0 / 8.0 - j / 4.0);
-                        if ((pt - Complex.FromPolarCoordinates(HitAreaADistance, phi)).Magnitude < HitAreaARadius)
-                        {
-                            node = j;
-                            break;
-                        }
-
-                        if ((pt - Complex.FromPolarCoordinates(HitAreaBDistance, phi)).Magnitude < HitAreaBRadius)
-                        {
-                            node = j | 8;
-                            break;
-                        }
-                    }
+                var node = TryGetNode(pt);
                 // node 可能为 null，也可能为 0 ~ 16 中的某个
 
                 if (lastNode != node)
@@ -434,7 +439,12 @@ namespace Notes.SlideUtils
 
             double lastDistance;
 
-            if (path.Segments[^1] is LineSegment)
+            if (nodeList[^1].Item1 >= 8)
+            {
+                // 最后一个区压根不是 A 区，那直接用 100px 的 LastDistance
+                lastDistance = LastDistanceNonA;
+            }
+            else if (path.Segments[^1] is LineSegment)
             {
                 // 最后一个区是直线进入
                 // 如果来自 A 区就用短的 LastDistance，例如 A3->A1 / A2->A1 的情况
