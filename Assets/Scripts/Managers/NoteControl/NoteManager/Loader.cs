@@ -9,6 +9,7 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using static MajCtx;
 
 public partial class NoteManager
@@ -1029,6 +1030,7 @@ public partial class NoteManager
         {
             var c = rawContent[i];
 
+            // skip duration
             if (c is '[')
             {
                 var endIdx = rawContent[i..].IndexOf(']');
@@ -1038,6 +1040,7 @@ public partial class NoteManager
                 continue;
             }
 
+            // pos
             if (c is >= '0' and <= '8')
             {
                 if (isSlideCode)
@@ -1062,8 +1065,8 @@ public partial class NoteManager
                     i++;
                     if (lastKey != -1 && lastShape != string.Empty)
                     {
-                        var shape = $"{lastKey}{lastShape.ToString()}{VKey}{curKey}";
-                        slideMetadatas.Add(SlideTableNeo.GetStandardSlide(shape));
+                        var slide = $"{lastKey}{lastShape.ToString()}{VKey}{curKey}";
+                        slideMetadatas.Add(SlideTableNeo.GetStandardSlide(slide));
                         lastShape = string.Empty;
                     }
                     lastKey = curKey;
@@ -1076,13 +1079,23 @@ public partial class NoteManager
                     {
                         if (lastShape.Length == 1 && lastShape[0] == '^')
                             lastShape = TranslateAutoSlide(lastKey, curKey);
-                        var shape = $"{lastKey}{lastShape.ToString()}{curKey}";
-                        slideMetadatas.Add(SlideTableNeo.GetStandardSlide(shape));
+                        var slide = $"{lastKey}{lastShape.ToString()}{curKey}";
+                        slideMetadatas.Add(SlideTableNeo.GetStandardSlide(slide));
                         lastShape = string.Empty;
                     }
                     lastKey = curKey;
                 }
             }
+            else if (c is 'A' or 'B' or 'C' or 'D' or 'E')
+            {
+                // 在开头或在形状后面时这个才可能是touch slide节点之一，不然就是slidecode或者无意义
+                if (i == 0 ||
+                    rawContent[i - 1] is '>' or '<' or '^' or 'v' or '-' or 'V' or 's' or 'z' or 'p' or 'q')
+                {
+
+                }
+            }
+            // shape
             else if (c is '>' or '<' or '^' or 'v' or '-' or 'V' or 's' or 'z')
             {
                 lastShape = c.ToString();
@@ -1099,7 +1112,7 @@ public partial class NoteManager
                     lastShape = c.ToString();
                 }
             }
-            else if (SlideCodeParser.CommandChars.Contains(c))
+            else if (SlideCodeParser.CommandChars.Contains(c)) // slidecode is a kind of shape
             {
                 var endIdx = rawContent[i..].IndexOf('K');
                 if (endIdx == -1)

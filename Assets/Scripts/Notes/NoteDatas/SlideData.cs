@@ -24,7 +24,6 @@ public struct SlideData
     /// </summary>
     public float finishJudgeTiming;
 
-    // FOR WIFI STARS CALCULATE ONLY
     public int startPos;
     public int endPos;
 
