@@ -29,6 +29,7 @@ Shader "Custom/Hit"
             };
 
             StructuredBuffer<HitRenderData> _NoteBuffer;
+            float4x4 _RootMatrix;
 
             struct appdata 
             { 
@@ -51,7 +52,8 @@ Shader "Custom/Hit"
                 float2 p = v.vertex.xy * hit.radius;
                 p += hit.pos;
                 
-                o.pos = TransformObjectToHClip(float3(p, 0));
+                float3 world = mul(_RootMatrix, float4(p,0,1)).xyz;
+                o.pos = TransformWorldToHClip(world);  
                 o.uv = v.uv;
                 o.color = hit.color;
                 

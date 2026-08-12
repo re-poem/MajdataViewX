@@ -30,6 +30,7 @@ Shader "Custom/NoteLine"
             StructuredBuffer<float4> _SpriteRects;
             float2 _AtlasSize;
             float _PixelsPerUnit;
+            float4x4 _RootMatrix;
 
             struct appdata { float4 vertex : POSITION; float2 uv : TEXCOORD0; };
             struct v2f   { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; float4 rect : TEXCOORD1; };
@@ -43,7 +44,8 @@ Shader "Custom/NoteLine"
                 float2 p = v.vertex.xy * note.scale * worldSize;
                 float s = sin(note.angRad); float c = cos(note.angRad);
                 float2 r = float2(p.x*c - p.y*s, p.x*s + p.y*c);
-                o.pos = TransformObjectToHClip(float3(r, 0));
+                float3 world = mul(_RootMatrix, float4(r,0,1)).xyz;
+                o.pos = TransformWorldToHClip(world);  
                 o.uv = v.uv;
                 o.rect = rect;
                 return o;

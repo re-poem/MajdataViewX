@@ -73,11 +73,8 @@ namespace MajdataViewX.Managers
                 else if (i - 8 > 16)  // D1~E8
                     ang = -45f * (i % 8 - 1) - 22.5f;
 
-                var effect = Instantiate(
-                    effectPrefab,
-                    new Vector3(pos.x, pos.y, 0),
-                    Quaternion.Euler(new Vector3(0, 0, ang)),
-                    parent.transform);
+                var effect = Instantiate(effectPrefab, parent.transform, false);
+                effect.transform.SetLocalPositionAndRotation(new Vector3(pos.x, pos.y, 0), Quaternion.Euler(new Vector3(0, 0, ang)));
 
                 var tapEffect = effect.transform.GetChild(0).gameObject;
                 tapAnimators[i] = tapEffect.GetComponent<Animator>();

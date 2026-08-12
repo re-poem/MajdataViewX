@@ -72,7 +72,7 @@ Shader "Custom/CircleOutsideSpriteDefault"
 
             half4 frag (v2f i) : SV_Target
             {
-                float dist = distance(i.worldPos.xy, _Center.xy);
+                float dist = distance(i.worldPos.xyz, _Center.xyz);
 
                 if (dist <= _Radius)
                     discard;

@@ -57,6 +57,7 @@ namespace MajdataViewX.Managers
 
         Material _matHit;
         Mesh _hitMesh;
+        Matrix4x4 _matrix;
 
         GraphicsBuffer _noteUvsBuffer;
         Material _matLine;
@@ -78,6 +79,7 @@ namespace MajdataViewX.Managers
         {
             _lineMesh = MeshGenerator.CreateRingMesh(32, 0.5f, 0.3f);
             _quadMesh = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
+            _matrix = transform.localToWorldMatrix;
 
             //REMEMBER TO FORCE INCLUDE
             _matLine = new Material(Shader.Find("Custom/NoteLine"));
@@ -107,11 +109,13 @@ namespace MajdataViewX.Managers
                         0,
                         0));
                 mat.SetFloat("_PixelsPerUnit", 100);
+                mat.SetMatrix("_RootMatrix", _matrix);
             }
             SetupMaterial(_matLine);
             SetupMaterial(_matSimple);
             SetupMaterial(_matNotes);
             SetupMaterial(_matMask);
+            _matHit.SetMatrix("_RootMatrix", _matrix);
 
             _djAutoMoveCurve = new(DJAUTO_CURVE_RESOLUTION, Allocator.Persistent);
             for (var i = 0; i < DJAUTO_CURVE_RESOLUTION; i++)
