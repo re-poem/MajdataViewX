@@ -11,9 +11,11 @@ namespace MajdataViewX.Base
         public static AllPerfectManager _allPerfectManager { get; set; }
         public static AudioManager _audioManager { get; set; }
         public static BgManager _bgManager { get; set; }
+        public static ButtonsManager buttonsManager { get; set; }
         public static DataLoader _dataLoader { get; set; }
         public static EffectManager _effectManager { get; set; }
         public static InputManager _inputManager { get; set; }
+        public static ModelManager _modelManager { get; set; }
         public static NoteManager _noteManager { get; set; }
         public static SkinManager _noteSkinManager { get; set; }
         public static ObjectCounter _objectCounter { get; set; }

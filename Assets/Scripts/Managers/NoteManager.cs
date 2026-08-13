@@ -404,6 +404,9 @@ namespace MajdataViewX.Managers
                 _hitSwipeGroup.Swap();
                 _isHitSwipeGroupLockedThisFrame = false;
             }
+
+            _modelManager.LeftHandPos = _noteManager.transform.TransformPoint((Vector2)_djAutoHands[0].Pos);
+            _modelManager.RightHandPos = _noteManager.transform.TransformPoint((Vector2)_djAutoHands[1].Pos);
         }
 
         void OnDestroy()

@@ -23,8 +23,11 @@ namespace MajdataViewX.Managers
         [SerializeField]
         private Material circledBgMaterial;
 
+        [SerializeField]
         private RawImage jacketImage;
+        [SerializeField]
         private GameObject songDetail;
+
         private static readonly int ShowHash = Animator.StringToHash("show");
         private Animator detailAnim;
         private SpriteRenderer spriteRender;
@@ -52,8 +55,6 @@ namespace MajdataViewX.Managers
 
         private void Start()
         {
-            jacketImage = GameObject.Find("Jacket").GetComponent<RawImage>();
-            songDetail = GameObject.Find("CanvasSongDetail");
             songDetail.SetActive(false);
 
             spriteRender = GetComponent<SpriteRenderer>();

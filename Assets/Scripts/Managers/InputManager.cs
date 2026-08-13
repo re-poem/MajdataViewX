@@ -30,6 +30,8 @@ namespace MajdataViewX.Managers
 
         public const float BUTTON_HIT_RENDER_RADIUS = 0.4f;
 
+        public Camera CurrentCamera;
+
         public bool ShowHand
         {
             get => InputData.ShowHand;
@@ -95,8 +97,16 @@ namespace MajdataViewX.Managers
         }
         private void CheckScreenPos(Vector2 screenPos)
         {
-            var mainCamera = Camera.main;
-            var pos = (Vector2)mainCamera.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, 10f));
+            // 场景（Game 容器）整体平移+旋转后，世界坐标不再等于判定坐标。
+            // 把屏幕射线变换到 NoteManager 局部空间，与 z=0 平面求交，
+            // 得到的 MajPos 局部坐标与 shader 用 _RootMatrix(localToWorld) 渲染互逆。
+            var ray = CurrentCamera.ScreenPointToRay(screenPos);
+            var tr = _noteManager.transform;
+            var origin = tr.InverseTransformPoint(ray.origin);
+            var dir = tr.InverseTransformDirection(ray.direction);
+            if (Mathf.Abs(dir.z) < 1e-6f) return;
+            var t = -origin.z / dir.z;
+            var pos = (Vector2)(origin + dir * t);
 
             InputData.HandleWorldPosInput(pos, NoteManager.DJAUTO_HAND_RADIUS);
         }

@@ -163,6 +163,108 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 51333385}
   m_CullTransparentMesh: 0
+--- !u!1001 &69027810
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 9.22
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -6
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1211360032856158959, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_ConstrainProportionsScale
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1982794556182063189, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_Name
+      value: RaddollV3
+      objectReference: {fileID: 0}
+    - target: {fileID: 5057455917940009109, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5057455917940009109, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 1b3b1d6a2b1dbd448bf33218f0153784, type: 2}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1982794556182063189, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1065191431}
+  m_SourcePrefab: {fileID: 100100000, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce, type: 3}
 --- !u!1 &101662631
 GameObject:
   m_ObjectHideFlags: 0
@@ -1611,7 +1713,7 @@ GameObject:
   - component: {fileID: 327139455}
   - component: {fileID: 327139456}
   m_Layer: 0
-  m_Name: Notes
+  m_Name: AllPerfectManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2821,26 +2923,13 @@ GameObject:
   - component: {fileID: 483431727}
   - component: {fileID: 483431726}
   - component: {fileID: 483431725}
-  - component: {fileID: 483431724}
   m_Layer: 5
-  m_Name: Button
+  m_Name: BtnToggleFullScreen
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &483431724
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 483431723}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 706f87a89456f3342971fe2c6dbc2ce1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!114 &483431725
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2885,8 +2974,8 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 483431724}
-        m_TargetAssemblyTypeName: ToggleFullScreen, Assembly-CSharp
+      - m_Target: {fileID: 1208312102}
+        m_TargetAssemblyTypeName: MajdataViewX.UI.ButtonsManager, Assembly-CSharp
         m_MethodName: ToggleFullscreen
         m_Mode: 1
         m_Arguments:
@@ -2949,11 +3038,11 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1208312101}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 49.211998, y: 49.215004}
-  m_SizeDelta: {x: 9.576, y: 9.576}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 1, y: 1}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 9.576004, y: 9.576}
+  m_Pivot: {x: 1, y: 1}
 --- !u!1 &494240254
 GameObject:
   m_ObjectHideFlags: 0
@@ -3093,7 +3182,7 @@ Camera:
     m_Bits: 4294967295
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 1
+  m_TargetDisplay: 0
   m_TargetEye: 0
   m_HDR: 1
   m_AllowMSAA: 0
@@ -3110,13 +3199,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 519420028}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -10}
+  m_LocalRotation: {x: 0.1564345, y: 0, z: 0, w: 0.98768836}
+  m_LocalPosition: {x: 0, y: 13.38, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 18, y: 0, z: 0}
 --- !u!114 &519420033
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3269,6 +3358,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0adfedb26a14acbb5f42813d0996177, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  MainCamera: {fileID: 271026778}
+  GameCamera: {fileID: 519420031}
 --- !u!4 &563846123
 Transform:
   m_ObjectHideFlags: 0
@@ -3297,7 +3388,7 @@ GameObject:
   - component: {fileID: 569942663}
   - component: {fileID: 569942662}
   m_Layer: 5
-  m_Name: ResoDropdown
+  m_Name: DDResolution
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3320,10 +3411,10 @@ RectTransform:
   - {fileID: 966825655}
   m_Father: {fileID: 1208312101}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 43.74, y: 42.449993}
-  m_SizeDelta: {x: 105.674, y: 30.001}
+  m_AnchorMin: {x: 1, y: 1}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: -9.950012, y: -12.01001}
+  m_SizeDelta: {x: 105.67401, y: 30.001}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &569942662
 MonoBehaviour:
@@ -3391,8 +3482,8 @@ MonoBehaviour:
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 483431724}
-        m_TargetAssemblyTypeName: ToggleFullScreen, Assembly-CSharp
+      - m_Target: {fileID: 1208312102}
+        m_TargetAssemblyTypeName: MajdataViewX.UI.ButtonsManager, Assembly-CSharp
         m_MethodName: SetResolution
         m_Mode: 1
         m_Arguments:
@@ -4128,6 +4219,8 @@ MonoBehaviour:
   defaultBg: {fileID: 21300000, guid: e76da1c30dfa99d4f88a60d737457499, type: 3}
   fullscreenBgMaterial: {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
   circledBgMaterial: {fileID: 2100000, guid: 58b71fdfceaec5b4c9eed8d4fa6fc443, type: 2}
+  jacketImage: {fileID: 706356591}
+  songDetail: {fileID: 390047040}
 --- !u!212 &655536541
 SpriteRenderer:
   serializedVersion: 2
@@ -5410,6 +5503,139 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 976999064}
   m_CullTransparentMesh: 1
+--- !u!1 &978857918
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 978857919}
+  - component: {fileID: 978857922}
+  - component: {fileID: 978857921}
+  - component: {fileID: 978857920}
+  m_Layer: 5
+  m_Name: BtnToggleCamera
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &978857919
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 978857918}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1208312101}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 1, y: 1}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: -9.669983, y: -2.130005}
+  m_SizeDelta: {x: 6.01, y: 5.3}
+  m_Pivot: {x: 1, y: 1}
+--- !u!114 &978857920
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 978857918}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Navigation:
+    m_Mode: 3
+    m_WrapAround: 0
+    m_SelectOnUp: {fileID: 0}
+    m_SelectOnDown: {fileID: 0}
+    m_SelectOnLeft: {fileID: 0}
+    m_SelectOnRight: {fileID: 0}
+  m_Transition: 1
+  m_Colors:
+    m_NormalColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 0.07058824}
+    m_HighlightedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
+    m_PressedColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 1}
+    m_SelectedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 0.07058824}
+    m_DisabledColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 0.5019608}
+    m_ColorMultiplier: 1
+    m_FadeDuration: 0.1
+  m_SpriteState:
+    m_HighlightedSprite: {fileID: 0}
+    m_PressedSprite: {fileID: 0}
+    m_SelectedSprite: {fileID: 0}
+    m_DisabledSprite: {fileID: 0}
+  m_AnimationTriggers:
+    m_NormalTrigger: Normal
+    m_HighlightedTrigger: Highlighted
+    m_PressedTrigger: Pressed
+    m_SelectedTrigger: Selected
+    m_DisabledTrigger: Disabled
+  m_Interactable: 1
+  m_TargetGraphic: {fileID: 978857921}
+  m_OnClick:
+    m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 1208312102}
+        m_TargetAssemblyTypeName: MajdataViewX.UI.ButtonsManager, Assembly-CSharp
+        m_MethodName: ToggleCamera
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+--- !u!114 &978857921
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 978857918}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: -4566190091907096745, guid: 09760f1c34feacd43bbe1bcdae5f8ec1,
+    type: 3}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!222 &978857922
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 978857918}
+  m_CullTransparentMesh: 1
 --- !u!1 &992833041
 GameObject:
   m_ObjectHideFlags: 0
@@ -5849,6 +6075,35 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &1065191430 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1982794556182063189, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+    type: 3}
+  m_PrefabInstance: {fileID: 69027810}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1065191431
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1065191430}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ded9c7561d721143b703814ddd7edba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MajdataViewX.Managers.ModelManager
+  _animator: {fileID: 1065191436}
+  LeftHandPos: {x: 0, y: 0, z: 0}
+  LeftHandRot: {x: 0, y: 0, z: 0, w: 0}
+  RightHandPos: {x: 0, y: 0, z: 0}
+  RightHandRot: {x: 0, y: 0, z: 0, w: 0}
+--- !u!95 &1065191436 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 5057455917940009109, guid: 9c1ebb20fb25e6947beb9b5ea2ffc6ce,
+    type: 3}
+  m_PrefabInstance: {fileID: 69027810}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1071815604
 GameObject:
   m_ObjectHideFlags: 0
@@ -6741,6 +6996,7 @@ GameObject:
   - component: {fileID: 1208312100}
   - component: {fileID: 1208312099}
   - component: {fileID: 1208312098}
+  - component: {fileID: 1208312102}
   m_Layer: 5
   m_Name: CanvasButtons
   m_TagString: Untagged
@@ -6797,7 +7053,7 @@ Canvas:
   m_GameObject: {fileID: 1208312097}
   m_Enabled: 1
   serializedVersion: 3
-  m_RenderMode: 1
+  m_RenderMode: 0
   m_Camera: {fileID: 519420031}
   m_PlaneDistance: 100
   m_PixelPerfect: 0
@@ -6824,6 +7080,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 483431728}
+  - {fileID: 978857919}
   - {fileID: 2015046460}
   - {fileID: 569942661}
   m_Father: {fileID: 1966927821}
@@ -6833,6 +7090,18 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!114 &1208312102
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1208312097}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 706f87a89456f3342971fe2c6dbc2ce1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1245744161
 GameObject:
   m_ObjectHideFlags: 0
@@ -10785,7 +11054,7 @@ GameObject:
   - component: {fileID: 2015046462}
   - component: {fileID: 2015046461}
   m_Layer: 5
-  m_Name: Button (2)
+  m_Name: BtnDisplayResoDD
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -10805,11 +11074,11 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1208312101}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: -90}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 49.212006, y: 42.45}
+  m_AnchorMin: {x: 1, y: 1}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: -1.6199951, y: -15.119995}
   m_SizeDelta: {x: 6.413, y: 6.413}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_Pivot: {x: 1, y: 1}
 --- !u!114 &2015046461
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10854,8 +11123,8 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 483431724}
-        m_TargetAssemblyTypeName: ToggleFullScreen, Assembly-CSharp
+      - m_Target: {fileID: 1208312102}
+        m_TargetAssemblyTypeName: MajdataViewX.UI.ButtonsManager, Assembly-CSharp
         m_MethodName: DisplayDropdown
         m_Mode: 1
         m_Arguments:
@@ -11482,3 +11751,4 @@ SceneRoots:
   - {fileID: 519420032}
   - {fileID: 1933081413}
   - {fileID: 1966927821}
+  - {fileID: 69027810}

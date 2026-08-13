@@ -21,6 +21,9 @@ namespace MajdataViewX.Managers
 {
     public class PlayManager : MonoBehaviour
     {
+        public Camera MainCamera;
+        public Camera GameCamera;
+
         public static ViewSummary Summary => new()
         {
             State = _state,
@@ -55,7 +58,8 @@ namespace MajdataViewX.Managers
         // 这里是游戏内部的东西的启动初始化
         private void Start()
         {
-            IsReloading = false;
+            MainCamera.targetDisplay = -1;
+            GameCamera.targetDisplay = 0;
 
             bgCover = GameObject.Find("BgCover").GetComponent<SpriteRenderer>();
             bgOutsideCover = GameObject.Find("BgOutsideCover").GetComponent<SpriteRenderer>();
@@ -90,6 +94,7 @@ namespace MajdataViewX.Managers
             MajBurst.MultTouchHandler.Init();
 
             _ = new InputManager();
+            _inputManager.CurrentCamera = GameCamera;
 
 
             SlideTableNeo.InitializeStandardSlideTable();
@@ -351,7 +356,6 @@ namespace MajdataViewX.Managers
                 //if not so, the last frame will be like after ResetAllManagers
                 await UniTask.Yield();
 
-                IsReloading = true;
                 ResetAllManagers();
                 // IsReloading = false;
                 // in NoteManager, wait for notes cleared
@@ -379,8 +383,6 @@ namespace MajdataViewX.Managers
 
             _state = CheckIsLoaded() ? ViewStatus.Loaded : ViewStatus.Idle;
             bgCover.color = new Color(0f, 0f, 0f, 0f);
-
-            IsReloading = false;
         }
 
         private void OnDestroy()

@@ -1474,7 +1474,7 @@ GameObject:
   - component: {fileID: 327139455}
   - component: {fileID: 327139456}
   m_Layer: 0
-  m_Name: Notes
+  m_Name: AllPerfectManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

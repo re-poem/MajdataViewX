@@ -8,7 +8,9 @@ using MajdataViewX.Types.Rendering;
 using MajdataViewX.Utils;
 using MajdataViewX.Utils.Extensions;
 using MajSimai;
+using NUnit;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Unity.Burst;
 using Unity.Collections;
@@ -36,7 +38,7 @@ namespace MajdataViewX.Managers
         private const int DJAUTO_CURVE_RESOLUTION = 2048;
         private static NativeArray<float> _djAutoMoveCurve;
 
-        public const int DJAUTO_LOOKAHEAD_COUNT = 8;
+        public const int DJAUTO_LOOKAHEAD_COUNT = 3;
 
         // ===== 放手时机 =====
         public const float DJAUTO_TAP_RELEASE_TIME_SEC = 0.022f;
@@ -59,7 +61,8 @@ namespace MajdataViewX.Managers
 
         /// <summary>手提前移动到 hit/swipe 的时间（线性插值窗口）</summary>
         public const float DJAUTO_HAND_PREADVANCE_SEC = 30f * MajCtx.FRAME_LENGTH_SEC;
-        /// <summary>手位移速度上限，超此距离来不及 -> Miss</summary>
+        /// <summary>手位移速度上限，超此距离来不及就Miss</summary>
+        //TODO:扫键还没考虑到该情况
         public const float DJAUTO_HAND_MAX_SPEED = 9.6f / (4f * MajCtx.FRAME_LENGTH_SEC);
 
         // ===== CombineTouchThisTiming 覆盖圆计算系数 =====
@@ -77,13 +80,13 @@ namespace MajdataViewX.Managers
         /// <summary>hit 到 hit 允许预绑定的最大时间差。</summary>
         public const float DJAUTO_HIT_HIT_CHAIN_SEC = 6f * MajCtx.FRAME_LENGTH_SEC;
         /// <summary>hit 到 hit 允许预绑定的最大辐角。</summary>
-        public const float DJAUTO_HIT_HIT_CHAIN_ANG = math.PI2 / 8 + (float)MajGeo.EpsilonRad; // 一个键左右
+        public const float DJAUTO_HIT_HIT_CHAIN_ANG = math.PI2 / 8; // 一个键左右
         // 拍划绑定
         /// <summary>hit 结束到 swipe 开始允许预绑定的最大时间差。</summary>
         public const float DJAUTO_HIT_SWIPE_CHAIN_SEC = 0.01f;
         /// <summary>hit 位置到 swipe 起点允许预绑定的最大距离。</summary>
         public const float DJAUTO_HIT_SWIPE_CHAIN_DIST = 0.1f;
-        // 拍划绑定
+        // 一笔画绑定
         /// <summary>swipe 结束到 swipe 开始允许预绑定的最大时间差。</summary>
         public const float DJAUTO_SWIPE_SWIPE_CHAIN_SEC = 0.078f;
         /// <summary>swipe 结束到 swipe 起点允许预绑定的最大距离。</summary>
@@ -91,14 +94,16 @@ namespace MajdataViewX.Managers
 
         // ===== FindNext 权重系数(待实测调参) =====
         /// <summary>位置代价:手到目标入口距离² × 此系数。</summary>
-        private const float DJAUTO_COST_POS = 1f;
-        /// <summary>惯性代价:(play.StartTime - hand.ServeEnd) × 此系数，刚释放的手续接更优。</summary>
+        private const float DJAUTO_COST_POS = 3f;
+        /// <summary>时间代价:(play.StartTime - hand.ServeEnd) × 此系数。</summary>
         private const float DJAUTO_COST_INERTIA = 8f;
         /// <summary>绕角惩罚:累积 |SweptAngle| × 此系数。</summary>
-        private const float DJAUTO_COST_SWEEP = 1.5f;
+        private const float DJAUTO_COST_SWEEP = 5f;
         /// <summary>时间可达硬约束的迟到容差:允许手在 StartTime 之后这么多秒内仍认领。</summary>
         private const float DJAUTO_COST_REACH_TOL = 0.05f;
 
+        /// <summary>准备按下时，要写入DJAutoHand以播放动画，这个取决于动画长度</summary>
+        private const float DJAUTO_PENDING_HIT = 0.15f;
 
         /// <summary>
         /// plays 排序键：StartTime 升序，同 StartTime 下 Hit 优先于 Swipe
@@ -716,10 +721,10 @@ namespace MajdataViewX.Managers
 
                     // 拍划绑定：swipe跟随最近的hit，hit经过排序一定在swipe前面
                     if (play.Type is DJAutoPlayType.Hit &&
-                        play2.Type is DJAutoPlayType.Swipe)
+                        play2.Type is DJAutoPlayType.Swipe &&
+                        math.abs(play.StartTime - play2.StartTime) < DJAUTO_HIT_SWIPE_CHAIN_SEC)
                     {
                         if ( // 内屏
-                        math.abs(play.StartTime - play2.StartTime) < DJAUTO_HIT_SWIPE_CHAIN_SEC &&
                         math.distancesq(play.Pos, play2.GetEntryPos()) < math.pow(DJAUTO_HIT_SWIPE_CHAIN_DIST, 2)) //相对宽松，适配大touch hit
                         {
                             // hit 不按满 0.022 直接转
@@ -730,8 +735,9 @@ namespace MajdataViewX.Managers
                         }
                         else if ( // 外键
                         math.lengthsq(play.Pos) > math.pow(MajGeo.MainRadius, 2f) &&
-                        math.abs(play.StartTime - play2.StartTime) < DJAUTO_HIT_SWIPE_CHAIN_SEC &&
-                        math.distancesq(play.Pos, play2.GetEntryPos()) < math.pow(DJAUTO_HIT_SWIPE_CHAIN_DIST + DJAUTO_BTN_DEFAULT_RADIUS, 2))
+                        math.abs(math.atan2(
+                            mathx.cross(play.Pos, play2.Pos),
+                            math.dot(play.Pos, play2.Pos))) < 0.1f)
                         {
                             // hit 不按满 0.022 直接转
                             play.EndTime = play.StartTime;
@@ -765,6 +771,7 @@ namespace MajdataViewX.Managers
             public float2 Pos;
             public readonly float Radius => Current.Radius;
             public DJAutoHandState State;
+            public bool IsPendingHit;
 
             public int CurrentIdx;               // 当前目标的 play 的索引，供释放用，实际调用Current更快
             public DJAutoPlayData Current;       // 当前目标的 play
@@ -885,9 +892,14 @@ namespace MajdataViewX.Managers
                             var pos2 = hand.Pos = math.lerp(hand.MoveFrom, hand.MoveTo, DJAutoMoveEvaluate(t));
                             if (time >= hand.Current.StartTime)
                             {
+                                hand.IsPendingHit = false;
                                 hand.State = DJAutoHandState.On;
                                 hand.Pos = hand.Current.GetEntryPos();
                                 hand.ServeEnd = hand.Current.EndTime;
+                            }
+                            else if (time >= hand.Current.StartTime - DJAUTO_PENDING_HIT)
+                            {
+                                hand.IsPendingHit = true;
                             }
 
                             hand.SweptAngle += math.atan2(
@@ -911,26 +923,27 @@ namespace MajdataViewX.Managers
 
                     for (int i = 0; i < plays.Length; i++)
                     {
-                        var p = plays[i];
-                        if (p.Type is DJAutoPlayType.NoneOrFinished) continue;
-                        if (p.IsReserved) continue;            // 已认领或绑定后继，跳过
-                        if (time > p.EndTime) continue;
-
-                        bool anyReachable = false;
-                        for (int h = 0; h < 2; h++)
+                        var lookahead = math.min(i + DJAUTO_LOOKAHEAD_COUNT, plays.Length - i);
+                        for (int j = i; j < lookahead; j++)
                         {
-                            if (hands[h].Current.Type is not DJAutoPlayType.NoneOrFinished) continue;  // 忙
-                            var cost = ComputeHandCost(hands[h], p, time);
-                            if (cost >= float.MaxValue) continue;  // 来不及
-                            anyReachable = true;
-                            if (cost < bestCost)
+                            var p = plays[j];
+                            if (p.Type is DJAutoPlayType.NoneOrFinished) continue;
+                            if (p.IsReserved) continue;            // 已认领或绑定后继，跳过
+                            if (time > p.EndTime) continue;
+
+                            for (int h = 0; h < 2; h++)
                             {
-                                bestCost = cost;
-                                bestHand = h;
-                                bestPlayIdx = i;
+                                if (hands[h].Current.Type is not DJAutoPlayType.NoneOrFinished) continue;  // 忙
+                                var cost = ComputeHandCost(hands[h], p, time);
+                                if (cost >= float.MaxValue) continue;  // 来不及
+                                if (cost < bestCost)
+                                {
+                                    bestCost = cost;
+                                    bestHand = h;
+                                    bestPlayIdx = j;
+                                }
                             }
                         }
-                        if (anyReachable) break;  // 最早可达候选已定，不看更晚的
                     }
 
                     if (bestPlayIdx < 0) return;  // 无可分配
@@ -939,18 +952,7 @@ namespace MajdataViewX.Managers
                 }
             }
 
-            /// <summary>空闲手认领候选：记录 idx/Current 并标 IsReserved 占用。Current 副本保留原 Type 供执行。</summary>
-            private void ClaimPlay(int handIdx, int playIdx)
-            {
-                ref var hand = ref hands.ElementRef(handIdx);
-                hand.CurrentIdx = playIdx;
-                hand.Current = plays[playIdx];
-                var p = plays[playIdx];
-                p.IsReserved |= true;
-                plays[playIdx] = p;
-            }
-
-            /// <summary>空闲手认领候选 p 的 cost(越小越优)：位置就近 + 惯性(刚释放优先) + 交叉惩罚 + 绕角惩罚；硬约束为时间可达。</summary>
+            /// <summary>空闲手认领候选 p 的 cost(越小越优)：位置就近 + 时间就近 + 交叉惩罚 + 绕角惩罚；硬约束为时间可达。</summary>
             private readonly float ComputeHandCost(DJAutoHand hand, DJAutoPlayData p, float time)
             {
                 var entryDistSq = math.distancesq(hand.Pos, p.GetEntryPos());
@@ -962,6 +964,17 @@ namespace MajdataViewX.Managers
                 cost += DJAUTO_COST_INERTIA * (p.StartTime - hand.ServeEnd);
                 cost += DJAUTO_COST_SWEEP * math.abs(hand.SweptAngle);
                 return cost;
+            }
+
+            /// <summary>空闲手认领候选：记录 idx/Current 并标 IsReserved 占用。Current 副本保留原 Type 供执行。</summary>
+            private void ClaimPlay(int handIdx, int playIdx)
+            {
+                ref var hand = ref hands.ElementRef(handIdx);
+                hand.CurrentIdx = playIdx;
+                hand.Current = plays[playIdx];
+                var p = plays[playIdx];
+                p.IsReserved |= true;
+                plays[playIdx] = p;
             }
 
             /// <summary>渲染 + 触发：On 按当前 data 位置触发 sensor/按键并红手渲染，否则灰手。handSide 用于 wifi L/R 派生。</summary>
