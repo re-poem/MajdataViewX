@@ -248,6 +248,9 @@ namespace MajdataViewX.Managers
 
                 JobHandle h = default;
 
+                __weights[0] = DJAUTO_COST_POS;
+                __weights[1] = DJAUTO_COST_TIME;
+                __weights[2] = DJAUTO_COST_TURN;
                 if (plays.Length > 0)
                 {
                     h = new PlayUpdateJob
@@ -255,6 +258,7 @@ namespace MajdataViewX.Managers
                         _djAutoMoveCurve = _djAutoMoveCurve,
                         plays = plays.AsArray(),
                         hands = _djAutoHands,
+                        __weights = __weights
                     }.Schedule(h);
                 }
 
@@ -434,6 +438,9 @@ namespace MajdataViewX.Managers
 
             if (_leftHandPlays.IsCreated) _leftHandPlays.Dispose();
             if (_rightHandPlays.IsCreated) _rightHandPlays.Dispose();
+
+
+            if (__weights.IsCreated) __weights.Dispose();
         }
 
         public void ResetState()

@@ -30,6 +30,10 @@ namespace MajdataViewX.Managers
         // touch 组合(sensor 子集掩码) -> 双圆手法的缓存，重复 touch 模式只算一次
         private readonly Dictionary<ulong, TwoCircleBest> _touchComboCache = new();
 
+        private NativeArray<float> __weights = new(3, Allocator.Persistent);
+        private const int DJAUTO_BEAM_DEPTH = 4;
+        private const int DJAUTO_MAX_BIND_CHAIN_LENGTH = 16;
+
 
         NativeArray<DJAutoHand> _djAutoHands = new(2, Allocator.Persistent);
         NativeArray<DJAutoPlayData> _leftHandPlays;
@@ -38,7 +42,8 @@ namespace MajdataViewX.Managers
         private const int DJAUTO_CURVE_RESOLUTION = 2048;
         private static NativeArray<float> _djAutoMoveCurve;
 
-        public const int DJAUTO_LOOKAHEAD_COUNT = 3;
+        public const int DJAUTO_LOOKBACK_COUNT = 3;
+        public const int DJAUTO_LOOKAHEAD_COUNT = 12;
 
         // ===== 放手时机 =====
         public const float DJAUTO_TAP_RELEASE_TIME_SEC = 0.022f;
@@ -92,13 +97,15 @@ namespace MajdataViewX.Managers
         /// <summary>swipe 结束到 swipe 起点允许预绑定的最大距离。</summary>
         public const float DJAUTO_SWIPE_SWIPE_CHAIN_DIST = 0.05f;
 
-        // ===== FindNext 权重系数(待实测调参) =====
-        /// <summary>位置代价:手到目标入口距离² × 此系数。</summary>
-        private const float DJAUTO_COST_POS = 3f;
-        /// <summary>时间代价:(play.StartTime - hand.ServeEnd) × 此系数。</summary>
-        private const float DJAUTO_COST_INERTIA = 8f;
-        /// <summary>绕角惩罚:累积 |SweptAngle| × 此系数。</summary>
-        private const float DJAUTO_COST_SWEEP = 5f;
+        // ===== FindNext 权重系数（归一化后，常用权重约为 0.5~2） =====
+        /// <summary>位置代价：手到分配参考点的距离²，以场地直径²归一化后乘此系数。</summary>
+        public float DJAUTO_COST_POS = 1f;
+        /// <summary>未来认领代价：当前服务结束后到目标开始的空档，以此时间尺度归一化后乘此系数。</summary>
+        public float DJAUTO_COST_TIME = 1f;
+        /// <summary>转向代价：按手当前位置的左右符号，惩罚朝该手负方向的横向移动。</summary>
+        public float DJAUTO_COST_TURN = 0.5f;
+        /// <summary>未来认领代价的归一化时间尺度。</summary>
+        private const float DJAUTO_COST_TIME_SCALE_SEC = 0.25f;
         /// <summary>时间可达硬约束的迟到容差:允许手在 StartTime 之后这么多秒内仍认领。</summary>
         private const float DJAUTO_COST_REACH_TOL = 0.05f;
 
@@ -780,17 +787,46 @@ namespace MajdataViewX.Managers
             public float MoveEnd;
             public float2 MoveFrom;
             public float2 MoveTo;
-
-            public float SweptAngle;      //当前相对原始方向的角度（弧度）
-
             public float ServeEnd;
         }
 
-        /// <summary>重置双手到初始位（半径 2.4 = 主圆一半，平行 x 轴直径两端），状态 Off，CurIdx=-1 无目标，FreeTime=-inf 确保初始可达。</summary>
+        /// <summary>一条尚未提交的 DJAuto 软规划链，同时保存两只手在假设分配后的状态。</summary>
+        [BurstCompile]
+        private struct DJAutoHandClip
+        {
+            public float2 Pos;
+            public float ServeEnd;
+            public int CurrentIdx;
+        }
+
+        [BurstCompile]
+        private struct DJAutoPlan
+        {
+            public DJAutoHandClip left;
+            public DJAutoHandClip right;
+            public int FirstPlayIdx;
+            public int FirstHandIdx;
+            public float Cost;
+            public bool Valid;
+        }
+
+        /// <summary>重置双手到初始位（半径 2.4 = 主圆一半，平行 x 轴直径两端），状态 Off，CurrentIdx=-1 无目标，ServeEnd=-∞ 确保初始可达。</summary>
         private void ResetDJAutoHands()
         {
-            _djAutoHands[0] = new DJAutoHand { Pos = new float2(-2.4f, 0f), Current = default };
-            _djAutoHands[1] = new DJAutoHand { Pos = new float2(2.4f, 0f), Current = default };
+            _djAutoHands[0] = new DJAutoHand
+            {
+                Pos = new float2(-2.4f, 0f),
+                CurrentIdx = -1,
+                Current = default,
+                ServeEnd = float.NegativeInfinity
+            };
+            _djAutoHands[1] = new DJAutoHand
+            {
+                Pos = new float2(2.4f, 0f),
+                CurrentIdx = -1,
+                Current = default,
+                ServeEnd = float.NegativeInfinity
+            };
         }
 
         [BurstCompile]
@@ -805,6 +841,7 @@ namespace MajdataViewX.Managers
 
             public NativeArray<DJAutoPlayData> plays;
             public NativeArray<DJAutoHand> hands;          // [0]=left [1]=right
+            public NativeArray<float> __weights;          // [0]=位置 [1]=时间 [2]=转向
 
             public void Execute()
             {
@@ -858,17 +895,12 @@ namespace MajdataViewX.Managers
                     case DJAutoHandState.OnMovingToBoundNext:
                         {
                             var t = math.saturate((time - hand.MoveStart) / math.max(hand.MoveEnd - hand.MoveStart, 1e-5f));
-                            var pos1 = hand.Pos;
-                            var pos2 = hand.Pos = math.lerp(hand.MoveFrom, hand.MoveTo, t);
+                            hand.Pos = math.lerp(hand.MoveFrom, hand.MoveTo, t);
                             if (time >= hand.Current.StartTime)
                             {
                                 hand.State = DJAutoHandState.On;
                                 hand.Pos = hand.Current.GetEntryPos();
                             }
-                            hand.SweptAngle += math.atan2(
-                                pos1.x * pos2.y - pos1.y * pos2.x,
-                                math.dot(pos1, pos2)
-                            );
                             break;
                         }
                     case DJAutoHandState.Off:
@@ -888,8 +920,7 @@ namespace MajdataViewX.Managers
                     case DJAutoHandState.Moving:
                         {
                             var t = math.saturate((time - hand.MoveStart) / math.max(hand.MoveEnd - hand.MoveStart, 1e-5f));
-                            var pos1 = hand.Pos;
-                            var pos2 = hand.Pos = math.lerp(hand.MoveFrom, hand.MoveTo, DJAutoMoveEvaluate(t));
+                            hand.Pos = math.lerp(hand.MoveFrom, hand.MoveTo, DJAutoMoveEvaluate(t));
                             if (time >= hand.Current.StartTime)
                             {
                                 hand.IsPendingHit = false;
@@ -901,69 +932,179 @@ namespace MajdataViewX.Managers
                             {
                                 hand.IsPendingHit = true;
                             }
-
-                            hand.SweptAngle += math.atan2(
-                                pos1.x * pos2.y - pos1.y * pos2.x,
-                                math.dot(pos1, pos2)
-                            );
                             break;
                         }
                 }
                 return false;
             }
 
-            /// <summary>统一分配空闲手：遍历 plays 找最早"有空闲手可达"的候选，选 cost 最小手认领并标 IsReserved；最多两轮(双手)。</summary>
             private void FindNext(float time)
             {
-                for (int round = 0; round < 2; round++)
-                {
-                    int bestPlayIdx = -1;
-                    int bestHand = -1;
-                    float bestCost = float.MaxValue;
-
-                    for (int i = 0; i < plays.Length; i++)
-                    {
-                        var lookahead = math.min(i + DJAUTO_LOOKAHEAD_COUNT, plays.Length - i);
-                        for (int j = i; j < lookahead; j++)
-                        {
-                            var p = plays[j];
-                            if (p.Type is DJAutoPlayType.NoneOrFinished) continue;
-                            if (p.IsReserved) continue;            // 已认领或绑定后继，跳过
-                            if (time > p.EndTime) continue;
-
-                            for (int h = 0; h < 2; h++)
-                            {
-                                if (hands[h].Current.Type is not DJAutoPlayType.NoneOrFinished) continue;  // 忙
-                                var cost = ComputeHandCost(hands[h], p, time);
-                                if (cost >= float.MaxValue) continue;  // 来不及
-                                if (cost < bestCost)
-                                {
-                                    bestCost = cost;
-                                    bestHand = h;
-                                    bestPlayIdx = j;
-                                }
-                            }
-                        }
-                    }
-
-                    if (bestPlayIdx < 0) return;  // 无可分配
-
-                    ClaimPlay(bestHand, bestPlayIdx);
-                }
+                var plan = BuildBestPlan(time);
+                if (plan.Valid) ClaimPlay(plan.FirstHandIdx, plan.FirstPlayIdx);
             }
 
-            /// <summary>空闲手认领候选 p 的 cost(越小越优)：位置就近 + 时间就近 + 交叉惩罚 + 绕角惩罚；硬约束为时间可达。</summary>
-            private readonly float ComputeHandCost(DJAutoHand hand, DJAutoPlayData p, float time)
+            /// <summary>
+            /// 从当前状态分别假设首项交给左手或右手，并让后续每一项在两只手之间选择较低的增量代价。
+            /// 规划结果只用于比较当前首项，真实状态每帧都会重新计算。
+            /// </summary>
+            private DJAutoPlan BuildBestPlan(float time)
             {
-                var entryDistSq = math.distancesq(hand.Pos, p.GetEntryPos());
-                float reachWindow = (p.StartTime + DJAUTO_COST_REACH_TOL - time) * DJAUTO_HAND_MAX_SPEED;
-                if (reachWindow < 0f || entryDistSq > reachWindow * reachWindow) return float.MaxValue;
+                var best = default(DJAutoPlan);
+                for (int firstHand = 0; firstHand < 2; firstHand++)
+                {
+                    var first = hands[firstHand];
+                    if (first.Current.Type is not DJAutoPlayType.NoneOrFinished) continue;
 
-                float cost = 0f;
-                cost += DJAUTO_COST_POS * math.distancesq(hand.Pos, p.GetAssignPos());
-                cost += DJAUTO_COST_INERTIA * (p.StartTime - hand.ServeEnd);
-                cost += DJAUTO_COST_SWEEP * math.abs(hand.SweptAngle);
-                return cost;
+                    var firstBegin = math.max(first.CurrentIdx - DJAUTO_LOOKBACK_COUNT, 0);
+                    var firstEnd = math.min(first.CurrentIdx + DJAUTO_LOOKAHEAD_COUNT + 1, plays.Length);
+                    for (int firstIdx = firstBegin; firstIdx < firstEnd; firstIdx++)
+                    {
+                        if (!TryAppendClip(
+                            CreateClip(first), firstIdx, time, time,
+                            out var firstClip, out var firstCost)) continue;
+
+                        var left = CreateClip(hands[0]);
+                        var right = CreateClip(hands[1]);
+                        if (firstHand == 0) left = firstClip; else right = firstClip;
+                        var total = firstCost;
+                        var cursor = firstClip.CurrentIdx;
+
+                        for (int step = 1; step < DJAUTO_BEAM_DEPTH; step++)
+                        {
+                            if (!TryFindNextForEitherHand(
+                                left, right, cursor, time,
+                                out var nextLeft, out var nextRight,
+                                out var nextIdx, out var nextCost)) break;
+                            left = nextLeft;
+                            right = nextRight;
+                            cursor = nextIdx;
+                            total += nextCost;
+                        }
+
+                        if (!best.Valid || total < best.Cost)
+                        {
+                            best = new DJAutoPlan
+                            {
+                                left = left,
+                                right = right,
+                                FirstPlayIdx = firstIdx,
+                                FirstHandIdx = firstHand,
+                                Cost = total,
+                                Valid = true
+                            };
+                        }
+                    }
+                }
+                return best;
+            }
+
+            private static DJAutoHandClip CreateClip(DJAutoHand hand)
+            {
+                return new DJAutoHandClip
+                {
+                    Pos = hand.Pos,
+                    ServeEnd = hand.ServeEnd,
+                    CurrentIdx = hand.CurrentIdx
+                };
+            }
+
+            private bool TryFindNextForEitherHand(
+                DJAutoHandClip left,
+                DJAutoHandClip right,
+                int cursor,
+                float time,
+                out DJAutoHandClip nextLeft,
+                out DJAutoHandClip nextRight,
+                out int nextIdx,
+                out float nextCost)
+            {
+                nextLeft = left;
+                nextRight = right;
+                nextIdx = -1;
+                nextCost = float.MaxValue;
+                var begin = math.max(cursor + 1, 0);
+                var end = math.min(cursor + DJAUTO_LOOKAHEAD_COUNT + 1, plays.Length);
+                for (int idx = begin; idx < end; idx++)
+                {
+                    if (TryAppendClip(left, idx, time, time, out var l, out var lc) && lc < nextCost)
+                    {
+                        nextLeft = l;
+                        nextRight = right;
+                        nextIdx = idx;
+                        nextCost = lc;
+                    }
+                    if (TryAppendClip(right, idx, time, time, out var r, out var rc) && rc < nextCost)
+                    {
+                        nextLeft = left;
+                        nextRight = r;
+                        nextIdx = idx;
+                        nextCost = rc;
+                    }
+                }
+                return nextIdx >= 0;
+            }
+
+            /// <summary>模拟把一个 play 分配给指定手；不修改 plays 的预留状态。</summary>
+            private bool TryAppendClip(
+                DJAutoHandClip clip,
+                int playIdx,
+                float time,
+                float referenceTime,
+                out DJAutoHandClip appended,
+                out float cost)
+            {
+                appended = default;
+                cost = float.MaxValue;
+                var p = plays[playIdx];
+                if (p.Type is DJAutoPlayType.NoneOrFinished || p.IsReserved || time > p.EndTime)
+                    return false;
+                if (playIdx <= clip.CurrentIdx) return false;
+
+                cost = ComputeClipCost(clip.Pos, clip.ServeEnd, p, referenceTime);
+                if (cost >= float.MaxValue) return false;
+
+                var exitIdx = playIdx;
+                var exit = p;
+                for (int count = 0; exit.BindPlayOffset != 0 && count < DJAUTO_MAX_BIND_CHAIN_LENGTH; count++)
+                {
+                    var nextIdx = exitIdx + exit.BindPlayOffset;
+                    if (nextIdx < 0 || nextIdx >= plays.Length) return false;
+                    exitIdx = nextIdx;
+                    exit = plays[exitIdx];
+                    if (exit.Type is DJAutoPlayType.NoneOrFinished) return false;
+                }
+
+                appended = new DJAutoHandClip
+                {
+                    Pos = exit.GetEndPos(),
+                    ServeEnd = exit.EndTime,
+                    CurrentIdx = exitIdx
+                };
+                return true;
+            }
+
+            private readonly float ComputeClipCost(float2 fromPos, float serveEnd, DJAutoPlayData p, float time)
+            {
+                var availableTime = math.max(serveEnd, time);
+                var entryDistSq = math.distancesq(fromPos, p.GetEntryPos());
+                var reachWindow =
+                    (p.StartTime + DJAUTO_COST_REACH_TOL - availableTime) * DJAUTO_HAND_MAX_SPEED;
+                if (reachWindow < 0f || entryDistSq > reachWindow * reachWindow)
+                    return float.MaxValue;
+
+                var assignPos = p.GetAssignPos();
+                var fieldDiameter = MajPos.MAIN_RADIUS * 2f;
+                var normalizedDistance =
+                    math.distancesq(fromPos, assignPos) / (fieldDiameter * fieldDiameter);
+                var normalizedFutureTime =
+                    math.max(0f, p.StartTime - availableTime) / DJAUTO_COST_TIME_SCALE_SEC;
+                var dx = assignPos.x - fromPos.x;
+                var normalizedTurn = math.max(0f, -math.sign(fromPos.x) * dx) / fieldDiameter;
+
+                return __weights[0] * normalizedDistance
+                    + __weights[1] * normalizedFutureTime
+                    + __weights[2] * normalizedTurn;
             }
 
             /// <summary>空闲手认领候选：记录 idx/Current 并标 IsReserved 占用。Current 副本保留原 Type 供执行。</summary>

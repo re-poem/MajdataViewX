@@ -1,4 +1,5 @@
 using MajdataViewX.Base;
+using Newtonsoft.Json;
 using MajdataViewX.Notes;
 using MajdataViewX.Notes.NoteDatas;
 using MajdataViewX.Notes.SlideUtils;
@@ -149,6 +150,38 @@ namespace MajdataViewX.Managers
             BindPlayPatterns();
 
             MajBurst.MultTouchHandler.Load(loadedTouches);
+
+            var playJsonData = new List<DJAutoPlayJsonData>(plays.Length);
+            for (var i = 0; i < plays.Length; i++)
+            {
+                var play = plays[i];
+                var startPos = play.GetEntryPos();
+                var endPos = play.GetEndPos();
+                playJsonData.Add(new DJAutoPlayJsonData
+                {
+                    Type = play.Type.ToString(),
+                    StartPos = new DJAutoPlayPosJsonData { X = startPos.x, Y = startPos.y },
+                    EndPos = new DJAutoPlayPosJsonData { X = endPos.x, Y = endPos.y },
+                    HandRadius = play.Radius,
+                    Duration = play.EndTime - play.StartTime
+                });
+            }
+            Debug.Log(JsonConvert.SerializeObject(playJsonData));
+        }
+
+        private struct DJAutoPlayJsonData
+        {
+            public string Type;
+            public DJAutoPlayPosJsonData StartPos;
+            public DJAutoPlayPosJsonData EndPos;
+            public float HandRadius;
+            public float Duration;
+        }
+
+        private struct DJAutoPlayPosJsonData
+        {
+            public float X;
+            public float Y;
         }
 
 

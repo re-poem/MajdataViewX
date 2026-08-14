@@ -82,15 +82,15 @@ namespace MajdataViewX.Managers
 
         public void ToggleCamera()
         {
-            if (_playManager.MainCamera.targetDisplay == -1)
+            if (_playManager.MainCamera.targetDisplay != 0)
             {
                 _playManager.MainCamera.targetDisplay = 0;
-                _playManager.GameCamera.targetDisplay = -1;
+                _playManager.GameCamera.targetDisplay = 1;
                 _inputManager.CurrentCamera = _playManager.MainCamera;
             }
             else
             {
-                _playManager.MainCamera.targetDisplay = -1;
+                _playManager.MainCamera.targetDisplay = 1;
                 _playManager.GameCamera.targetDisplay = 0;
                 _inputManager.CurrentCamera = _playManager.GameCamera;
             }
