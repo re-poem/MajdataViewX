@@ -66,6 +66,7 @@ powershell -ExecutionPolicy Bypass -File .\ffmpeg-builder\build.ps1
 
 ## 文档 / Documentation
 
+- [macOS native build](docs/macos.md)
 - [中文 Wiki](https://github.com/LingFeng-bbben/MajdataView/wiki)
 - [English Guide On Charting](https://rentry.co/maiguide#making-the-chart)
 - [X新功能Wiki(不再维护，即将迁移)](https://github.com/re-poem/MajdataViewX/wiki)
