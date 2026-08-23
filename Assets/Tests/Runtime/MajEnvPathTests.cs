@@ -14,5 +14,6 @@ public sealed class MajEnvPathTests
         var majBase = (string)majEnv.GetProperty("MajBase")!.GetValue(null)!;
 
         Assert.That(majBase, Is.EqualTo(Path.Combine(Application.dataPath, "MacOS")));
+        Assert.That(Directory.Exists(majBase), Is.True);
     }
 }

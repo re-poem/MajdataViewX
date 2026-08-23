@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using MajdataViewX.Managers;
 using UnityEditor;
 using UnityEditor.Build.Profile;
 using UnityEditor.Build.Reporting;
@@ -26,9 +25,6 @@ public static class MacBuild
         var recorder = AssetImporter.GetAtPath("Assets/Plugins/x86_64/RenderingOut.dll") as PluginImporter;
         if (recorder is null || recorder.GetCompatibleWithPlatform(BuildTarget.StandaloneOSX))
             throw new InvalidOperationException("The Windows-only recorder must be excluded from macOS builds.");
-
-        if (ScreenRecorder.IsSupported)
-            throw new InvalidOperationException("Video recording must be disabled in the macOS player.");
     }
 
     [MenuItem("Build/macOS")]
