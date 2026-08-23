@@ -232,6 +232,12 @@ namespace MajdataViewX.Managers
             if (_state is not (ViewStatus.Loaded or ViewStatus.Paused))
                 return;
 
+            if (playmode is PlaybackMode.Record && !ScreenRecorder.IsSupported)
+            {
+                _wsServer.Error("Video recording is currently supported only on Windows.");
+                return;
+            }
+
             _state = ViewStatus.Busy;
             try
             {
