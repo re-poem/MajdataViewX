@@ -21,6 +21,6 @@ Run the checked-in build entry point from the repository root:
 
 The output is `Builds/macOS/MajdataViewX.app`. The build targets Apple Silicon, matching the `osx-arm64` MajdataEdit-Neo app.
 
-`SFX` and `Skin` are release assets rather than source files. The MajdataEdit-Neo macOS packager copies them into the final helper app.
+`SFX` and `Skin` are release assets rather than source files. The MajdataEdit-Neo macOS packager copies them into `MajdataViewX.app/Contents/MacOS`, where the macOS player resolves release assets at runtime.
 
 Video recording remains Windows-only. The macOS player returns an explicit error instead of loading `RenderingOut.dll`.

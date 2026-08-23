@@ -8,9 +8,9 @@ namespace MajdataViewX.Base
 #if UNITY_EDITOR
         // 编辑器下，指向项目根目录（Assets 的上一级）
         public static string MajBase = new DirectoryInfo(Application.dataPath).Parent!.FullName;
+#elif UNITY_STANDALONE_OSX
+        public static string MajBase => Path.Combine(Application.dataPath, "MacOS");
 #else
-        // 打包后，Application.dataPath 的上一级在 Windows 下是 exe 目录
-        // 但为了兼顾 Mac 等平台，用 AppContext 或者是 dataPath 的物理同级更安全
         public static string MajBase => System.AppDomain.CurrentDomain.BaseDirectory;
 #endif
 
