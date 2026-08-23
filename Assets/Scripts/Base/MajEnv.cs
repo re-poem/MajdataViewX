@@ -7,7 +7,7 @@ namespace MajdataViewX.Base
     {
 #if UNITY_EDITOR
         // 编辑器下，指向项目根目录（Assets 的上一级）
-        public static string MajBase = new DirectoryInfo(Application.dataPath).Parent!.FullName;
+        public static string MajBase => new DirectoryInfo(Application.dataPath).Parent!.FullName;
 #elif UNITY_STANDALONE_OSX
         public static string MajBase => Path.Combine(Application.dataPath, "MacOS");
 #else
