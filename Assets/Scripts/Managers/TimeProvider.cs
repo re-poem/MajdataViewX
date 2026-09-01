@@ -50,6 +50,7 @@ namespace MajdataViewX.Managers
             _timeProvider = this;
             ResetState();
 
+            Directory.CreateDirectory(MajEnv.SharedMemoryPath);
             var mmfAudioTimeFileStream = new FileStream(
                 MajEnv.MmfAudioTimePath,
                 FileMode.OpenOrCreate,

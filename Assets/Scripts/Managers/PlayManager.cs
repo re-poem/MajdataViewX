@@ -94,6 +94,7 @@ namespace MajdataViewX.Managers
 
             SlideTableNeo.InitializeStandardSlideTable();
 
+            Directory.CreateDirectory(MajEnv.SharedMemoryPath);
             var mmfChartDataFileStream = new FileStream(
                     MajEnv.MmfChartDataPath,
                     FileMode.OpenOrCreate,

@@ -17,10 +17,13 @@ namespace MajdataViewX.Base
         public static string GetPath(string relativePath) =>
             Path.Combine(MajBase, relativePath);
 
+        // 共享内存文件目录：与 Edit-Neo exe 同目录（假设两者 exe 在同一目录）
+        public static string SharedMemoryPath => GetPath("SharedMemory");
+
         public static string MmfAudioTimePath =>
-            Path.Combine(Application.persistentDataPath, "majdata_time.dat");
+            Path.Combine(SharedMemoryPath, "majdata_time.dat");
         public const long MmfChartDataCapacity = 64 * 1024 * 1024; //64mb
         public static string MmfChartDataPath =>
-            Path.Combine(Application.persistentDataPath, "majdata_chart.dat");
+            Path.Combine(SharedMemoryPath, "majdata_chart.dat");
     }
 }
