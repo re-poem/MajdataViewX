@@ -1,0 +1,6 @@
+{
+    "name": "MajdataViewX.Tests",
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}
