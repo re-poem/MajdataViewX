@@ -41,6 +41,17 @@ namespace MajdataViewX.Managers
 
 
         public bool IsRecording { get; private set; }
+        public static bool IsSupported
+        {
+            get
+            {
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+                return true;
+#else
+                return false;
+#endif
+            }
+        }
 
         private void Awake()
         {
@@ -51,6 +62,12 @@ namespace MajdataViewX.Managers
         public async UniTask StartRecording(string maidataPath,
             int fps, ExportQuality quality, [CanBeNull] Action onStart = null)
         {
+            if (!IsSupported)
+            {
+                _wsServer.Error("Video recording is currently supported only on Windows.");
+                return;
+            }
+
             QualitySettings.vSyncCount = 0;
             try
             {
