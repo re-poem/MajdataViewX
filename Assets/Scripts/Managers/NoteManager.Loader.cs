@@ -1032,7 +1032,7 @@ namespace MajdataViewX.Managers
                         lastKey = curKey;
                     }
                 }
-                else if (c is (byte)'>' or (byte)'<' or (byte)'%' or (byte)'v' or (byte)'-' or (byte)'V' or (byte)'s' or (byte)'z')
+                else if (c is (byte)'>' or (byte)'<' or (byte)'^' or (byte)'v' or (byte)'-' or (byte)'V' or (byte)'s' or (byte)'z')
                 {
                     lastShape = rawContent[i..(i + 1)];
                 }
