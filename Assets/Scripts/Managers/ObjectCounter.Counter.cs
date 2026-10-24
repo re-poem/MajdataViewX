@@ -138,7 +138,7 @@ namespace MajdataViewX.Managers
         {
             foreach (var timing in chart.Timings)
             {
-                foreach (var note in timing.Notes)
+                foreach (var note in chart.Notes.Slice((int)timing.NotesFirst, (int)timing.NotesCount))
                 {
                     if (!note.IsBreak)
                     {
@@ -176,7 +176,7 @@ namespace MajdataViewX.Managers
             foreach (var timing in chart.Timings)
             {
                 if (timing.Time >= ignore) continue;
-                foreach (var note in timing.Notes)
+                foreach (var note in chart.Notes.Slice((int)timing.NotesFirst, (int)timing.NotesCount))
                 {
                     if (note.Type is SimaiNoteType.SLIDE && 
                         timing.Time + note.SlideShootDelay >= ignore)

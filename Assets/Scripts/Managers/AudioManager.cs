@@ -406,7 +406,7 @@ namespace MajdataViewX.Managers
                 var addedStart = false;
                 var addedEnd = false;
 
-                foreach (var note in timingPoint.Notes)
+                foreach (var note in chart.Notes.Slice((int)timingPoint.NotesFirst, (int)timingPoint.NotesCount))
                 {
                     switch (note.Type)
                     {

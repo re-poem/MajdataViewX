@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using Unity.Properties;
 using UnityEngine;
@@ -178,7 +179,13 @@ namespace MajdataViewX.Managers
             var previousState = _state;
             _state = ViewStatus.Busy;
 
-            var chart = SimaiChart.Parse(chartText ?? string.Empty);
+            var source = Encoding.UTF8.GetBytes(chartText ?? string.Empty);
+            SimaiChart chart;
+            unsafe
+            {
+                fixed (byte* sourcePtr = source)
+                    chart = SimaiChart.Parse(sourcePtr, source.Length);
+            }
 
             _chart?.Dispose();
             _chart = chart;
@@ -377,6 +384,8 @@ namespace MajdataViewX.Managers
 
         private void OnDestroy()
         {
+            _chart?.Dispose();
+            _chart = null;
             Volatile.Write(ref _audioManagerThreadRunning, 0);
             if (_audioManagerThread is { IsAlive: true } &&
                 _audioManagerThread != Thread.CurrentThread)

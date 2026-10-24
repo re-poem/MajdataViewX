@@ -47,5 +47,11 @@ TagManager:
   - name: Default
     uniqueID: 0
     locked: 0
+  - name: NoteEffect
+    uniqueID: 1692104321
+    locked: 0
+  - name: SongDetail
+    uniqueID: 3130955153
+    locked: 0
   m_RenderingLayers:
   - Default

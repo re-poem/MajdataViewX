@@ -156,7 +156,7 @@ namespace MajdataViewX.Managers
             var noteCount = 0;
             foreach (var timing in chart.Timings)
             {
-                noteCount += timing.Notes.Length;
+                noteCount += (int)timing.NotesCount;
             }
             var lastNoteTime = chart.Timings[^1].Time;
 

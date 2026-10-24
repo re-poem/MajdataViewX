@@ -1895,7 +1895,7 @@ Canvas:
   m_VertexColorAlwaysGammaSpace: 0
   m_AdditionalShaderChannelsFlag: 0
   m_UpdateRectTransformForStandalone: 0
-  m_SortingLayerID: 2089748817
+  m_SortingLayerID: -1164012143
   m_SortingOrder: 0
   m_TargetDisplay: 0
 --- !u!224 &390047044
@@ -4623,10 +4623,10 @@ SpriteMask:
   m_MaskInteraction: 0
   m_Sprite: {fileID: 21300000, guid: 85371318f6efbc54a8702e8e1835ee9d, type: 3}
   m_MaskAlphaCutoff: 0.285
-  m_FrontSortingLayerID: 2089748817
-  m_BackSortingLayerID: 0
-  m_FrontSortingLayer: 0
-  m_BackSortingLayer: 0
+  m_FrontSortingLayerID: -1164012143
+  m_BackSortingLayerID: -1164012143
+  m_FrontSortingLayer: 2
+  m_BackSortingLayer: 2
   m_FrontSortingOrder: 35
   m_BackSortingOrder: 33
   m_IsCustomRangeActive: 1
@@ -11178,8 +11178,8 @@ SpriteRenderer:
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
   m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 2089748817
-  m_SortingLayer: 0
+  m_SortingLayerID: -1164012143
+  m_SortingLayer: 2
   m_SortingOrder: 34
   m_MaskInteraction: 2
   m_Sprite: {fileID: 21300000, guid: 4242916334dffd14f85ff0523d3edc93, type: 3}

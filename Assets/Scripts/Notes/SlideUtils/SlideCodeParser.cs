@@ -1,4 +1,6 @@
-﻿using MajdataViewX.Base;
+﻿using Cimai;
+using MajdataViewX.Base;
+using MajdataViewX.Utils.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -196,7 +198,31 @@ namespace MajdataViewX.Notes.SlideUtils
         /// <exception cref="ArgumentOutOfRangeException">Command type overflow</exception>
         public static ParametricSlidePath Parse(string code)
         {
-            var commands = ParseCommands(code);
+            return Parse(ParseCommands(code));
+        }
+
+        public static ParametricSlidePath Parse(int start, ReadOnlySpan<SlidePart> parts)
+        {
+            var commands = new List<Command>(parts.Length + 1) { new(CommandType.NodeA, start) };
+            foreach (var part in parts)
+            {
+                var type = part.Type switch
+                {
+                    SlideType.A_CMD => CommandType.NodeA,
+                    SlideType.B_CMD => CommandType.NodeB,
+                    SlideType.C_CMD => CommandType.NodeC,
+                    SlideType.P_CMD => CommandType.OrbitCcw,
+                    SlideType.Q_CMD => CommandType.OrbitCw,
+                    SlideType.K_CMD => CommandType.NodeEnd,
+                    _ => throw new ArgumentOutOfRangeException(nameof(parts))
+                };
+                commands.Add(new Command(type, type == CommandType.NodeC ? 0 : part.End.GetPosNum()));
+            }
+            return Parse(commands);
+        }
+
+        private static ParametricSlidePath Parse(IReadOnlyList<Command> commands)
+        {
             var lastCmd = commands[0];
             // The first command is guarantee to be 'A'
             var generator = SlidePathConstructor.BeginAt(MajGeo.PointGroupA(lastCmd.Value));

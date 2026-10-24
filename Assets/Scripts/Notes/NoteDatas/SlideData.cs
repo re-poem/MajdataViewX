@@ -241,16 +241,12 @@ namespace MajdataViewX.Notes.NoteDatas
         }
 
         /// <summary>
-        /// 只比较noteContent未包含的信息：
-        /// tapTime + content->时长 = shootTime/LastFor
-        /// content->slideShape = startPos/endPos/那一大串表示judgeQueue和slideArrows的
+        /// 路径由 SlideParts 与起点比较；此处检查剩余的时间与音符属性。
         /// </summary>
         public readonly bool IsFoldablePropOnly(SlideData other) =>
             tapTime == other.tapTime &&
-            //shootTime == other.shootTime &&
-            //startPos == other.startPos &&
-            //endPos == other.endPos &&
-            //LastFor == other.LastFor &&
+            shootTime == other.shootTime &&
+            LastFor == other.LastFor &&
             speed == other.speed &&
 
             isEach == other.isEach &&

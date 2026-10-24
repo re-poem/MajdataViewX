@@ -1,5 +1,7 @@
-﻿using MajdataViewX.Base;
+﻿using Cimai;
+using MajdataViewX.Base;
 using MajdataViewX.Types.Input;
+using MajdataViewX.Utils.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -401,12 +403,12 @@ namespace MajdataViewX.Notes.SlideUtils
         }
 
         /// <summary>获取除了 wifi 以外的标准 slide</summary>
-        /// <remarks>没有做任何参数校验，获取前记得初始化</remarks>
-        public static SlideMetadata GetStandardSlide(string key) => SLIDE_TABLE[key];
+        /// <remarks>没有做任何参数校验（因此输入>SimaiNotePos.A1的会找不到），获取前记得初始化</remarks>
+        public static SlideMetadata GetStandardSlide(int start, SlidePart part) => SLIDE_TABLE[(start, part.Type, (int)part.End)];
 
         /// <summary>获取 wifi</summary>
         /// <remarks>没有做任何参数校验，获取前记得初始化</remarks>
-        public static SlideMetadata GetWifiSlide(string key) => WIFI_TABLE[key];
+        public static SlideMetadata GetWifiSlide(int start) => WIFI_TABLE[start];
 
         /// <summary>把多条 slide 直接拼接成一条 conn-slide，然后就可以和单一 slide 一样处理了</summary>
         /// <remarks>没有做任何 wifi 的特判，如果待连接的 slide 里有 wifi 是 UB</remarks>
@@ -485,16 +487,16 @@ namespace MajdataViewX.Notes.SlideUtils
         }
 
         /// <summary>用 slide-code 直接生成一条完整的自定义 slide</summary>
-        public static SlideMetadata MakeCustomSlide(string slideCode)
+        public static SlideMetadata MakeCustomSlide(int start, ReadOnlySpan<SlidePart> parts)
         {
-            var path = SlideCodeParser.Parse(slideCode);
+            var path = SlideCodeParser.Parse(start, parts);
             return CreateSlideEntry(path);
         }
 
         // ReSharper disable once InconsistentNaming
-        public static readonly Dictionary<string, SlideMetadata> SLIDE_TABLE = new();
+        public static readonly Dictionary<(int Start, SlideType Type, int End), SlideMetadata> SLIDE_TABLE = new();
         // ReSharper disable once InconsistentNaming
-        public static readonly Dictionary<string, SlideMetadata> WIFI_TABLE = new();
+        public static readonly Dictionary<int, SlideMetadata> WIFI_TABLE = new();
 
         /// <summary>
         /// 打表所有标准 slide 以及 Wifi
@@ -517,7 +519,7 @@ namespace MajdataViewX.Notes.SlideUtils
                 {
                     var start = 1 + i;
                     var end = 1 + ((i + diff) & 7);
-                    var key = $"{start}-{end}";
+                    var key = (start, SlideType.STRAIGHT, end);
                     path.SetRotoreflection(false, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(path));
                 }
@@ -586,29 +588,29 @@ namespace MajdataViewX.Notes.SlideUtils
                     var start = 1 + i;
                     var end = 1 + ((i + diff) & 7);
 
-                    var key = (start is 3 or 4 or 5 or 6) ? $"{start}>{end}" : $"{start}<{end}";
+                    var key = (start, SlideType.CIRCLE_L, end);
                     pathCircle.SetRotoreflection(false, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(pathCircle));
 
-                    key = $"{start}p{end}";
+                    key = (start, SlideType.CURVE_L, end);
                     pathP.SetRotoreflection(false, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(pathP));
 
-                    key = $"{start}pp{end}";
+                    key = (start, SlideType.BEND_L, end);
                     pathPP.SetRotoreflection(false, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(pathPP));
 
                     end = 1 + ((i - diff) & 7);
 
-                    key = (start is 3 or 4 or 5 or 6) ? $"{start}<{end}" : $"{start}>{end}";
+                    key = (start, SlideType.CIRCLE_R, end);
                     pathCircle.SetRotoreflection(true, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(pathCircle));
 
-                    key = $"{start}q{end}";
+                    key = (start, SlideType.CURVE_R, end);
                     pathP.SetRotoreflection(true, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(pathP));
 
-                    key = $"{start}qq{end}";
+                    key = (start, SlideType.BEND_R, end);
                     pathPP.SetRotoreflection(true, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(pathPP));
                 }
@@ -627,7 +629,7 @@ namespace MajdataViewX.Notes.SlideUtils
                 {
                     var start = 1 + i;
                     var end = 1 + ((i + diff) & 7);
-                    var key = $"{start}v{end}";
+                    var key = (start, SlideType.CORNER, end);
                     path.SetRotoreflection(false, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(path));
                 }
@@ -645,10 +647,10 @@ namespace MajdataViewX.Notes.SlideUtils
                 {
                     var start = 1 + i;
                     var end = 1 + ((i + 4) & 7);
-                    var key = $"{start}s{end}";
+                    var key = (start, SlideType.THUNDER_L, end);
                     path.SetRotoreflection(false, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(path));
-                    key = $"{start}z{end}";
+                    key = (start, SlideType.THUNDER_R, end);
                     path.SetRotoreflection(true, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(path));
                 }
@@ -666,15 +668,13 @@ namespace MajdataViewX.Notes.SlideUtils
                 for (var i = 0; i <= 7; i++)
                 {
                     var start = 1 + i;
-                    var mid = 1 + ((i - 2) & 7);
                     var end = 1 + ((i + diff) & 7);
-                    var key = $"{start}V{mid}{end}";
+                    var key = (start, SlideType.SKIP_L, end);
                     path.SetRotoreflection(false, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(path, isSpecial ? SlideFlag.SpecialV : SlideFlag.NormalV));
 
-                    mid = 1 + ((i + 2) & 7);
                     end = 1 + ((i - diff) & 7);
-                    key = $"{start}V{mid}{end}";
+                    key = (start, SlideType.SKIP_R, end);
                     path.SetRotoreflection(true, i);
                     SLIDE_TABLE.Add(key, CreateSlideEntry(path, isSpecial ? SlideFlag.SpecialV : SlideFlag.NormalV));
                 }
@@ -684,9 +684,7 @@ namespace MajdataViewX.Notes.SlideUtils
             for (var i = 0; i <= 7; i++)
             {
                 var start = 1 + i;
-                var end = 1 + ((i + 4) & 7);
-                var key = $"{start}w{end}";
-                WIFI_TABLE.Add(key, CreateWifiEntry(start));
+                WIFI_TABLE.Add(start, CreateWifiEntry(start));
             }
         }
     }

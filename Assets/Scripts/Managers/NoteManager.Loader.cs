@@ -77,7 +77,10 @@ namespace MajdataViewX.Managers
 
             foreach (var timing in chart.Timings)
             {
-                LoadTiming(timing);
+                LoadTiming(
+                    timing,
+                    chart.Notes.Slice((int)timing.NotesFirst, (int)timing.NotesCount),
+                    chart.SlideParts);
             }
 
 
@@ -156,15 +159,15 @@ namespace MajdataViewX.Managers
         /// 而且mine的tapline同样需要换为each line
         /// 因此全部丢进LoadSkin作特判
         /// </remarks>
-        private unsafe void LoadTiming(in SimaiTiming timing)
+        private unsafe void LoadTiming(in SimaiTiming timing, ReadOnlySpan<SimaiNote> notes, ReadOnlySpan<SlidePart> slideParts)
         {
             int touchStartIdx = touches.Length;
             int touchHoldStartIdx = touchHolds.Length;
 
-            var startPositions = stackalloc int[timing.Notes.Length];
+            var startPositions = stackalloc int[(int)timing.NotesCount];
             var nonMineCount = 0;
 
-            var loadedStarIndex = stackalloc int[timing.Notes.Length];
+            var loadedStarIndex = stackalloc int[(int)timing.NotesCount];
             var loadedStarCount = 0;
             var loadedSlideCount = stackalloc int[8];
             var loadedSlideLength = stackalloc float[8];
@@ -172,13 +175,14 @@ namespace MajdataViewX.Managers
 
             bool eachLineIgnoreSV = false;
 
-            ReadOnlySpan<byte> lastSlideContent = ReadOnlySpan<byte>.Empty;
+            ReadOnlySpan<SlidePart> lastSlideParts = ReadOnlySpan<SlidePart>.Empty;
+            var lastSlideStart = SimaiNotePos.NONE;
             var sameTapCount = 0;
             var sameHoldCount = 0;
             var sameTouchCount = 0;
             var sameTouchHoldCount = 0;
             var sameSlideCount = 0;
-            foreach (var note in timing.Notes)
+            foreach (var note in notes)
             {
                 try
                 {
@@ -189,7 +193,7 @@ namespace MajdataViewX.Managers
                             if (!note.IsMine)
                             {
                                 eachLineIgnoreSV |= note.IsIgnoreSV;
-                                startPositions[nonMineCount++] = note.StartPos;
+                                startPositions[nonMineCount++] = note.StartPos.GetPosNum();
                             }
                             break;
                         case SimaiNoteType.HOLD:
@@ -197,7 +201,7 @@ namespace MajdataViewX.Managers
                             if (!note.IsMine)
                             {
                                 eachLineIgnoreSV |= note.IsIgnoreSV;
-                                startPositions[nonMineCount++] = note.StartPos;
+                                startPositions[nonMineCount++] = note.StartPos.GetPosNum();
                             }
                             break;
                         case SimaiNoteType.TOUCH:
@@ -207,15 +211,19 @@ namespace MajdataViewX.Managers
                             LoadTouchHold(timing, note, ref sameTouchHoldCount);
                             break;
                         case SimaiNoteType.SLIDE:
-                            lastSlideContent = LoadSlideChain(
+                            var parts = slideParts.Slice((int)note.SlidePartsFirst, (int)note.SlidePartsCount);
+                            LoadSlideChain(
                                 timing,
                                 note,
-                                lastSlideContent,
-                                ref sameTapCount,
+                                parts,
+                                lastSlideParts,
+                                lastSlideStart,
                                 ref sameSlideCount,
-                                ref loadedSlideLength[note.StartPos - 1],
-                                ref loadedSlideTime[note.StartPos - 1]);
-                            loadedSlideCount[note.StartPos - 1]++;
+                                ref loadedSlideLength[note.StartPos.GetPosNum() - 1],
+                                ref loadedSlideTime[note.StartPos.GetPosNum() - 1]);
+                            lastSlideParts = parts;
+                            lastSlideStart = note.StartPos;
+                            loadedSlideCount[note.StartPos.GetPosNum() - 1]++;
                             break;
                     }
                 }
@@ -584,7 +592,7 @@ namespace MajdataViewX.Managers
             in SimaiNote note,
             ref int sameTouchCount)
         {
-            var sensor = GetSensor((char)note.TouchArea, note.StartPos);
+            var sensor = note.StartPos.GetSensor();
             var touch = new TouchData
             {
                 time = (float)timing.Time,
@@ -631,7 +639,7 @@ namespace MajdataViewX.Managers
             in SimaiNote note,
             ref int sameTouchHoldCount)
         {
-            var sensor = GetSensor((char)note.TouchArea, note.StartPos);
+            var sensor = note.StartPos.GetSensor();
             var th = new TouchHoldData
             {
                 time = (float)timing.Time,
@@ -668,21 +676,23 @@ namespace MajdataViewX.Managers
                 });
         }
 
-        private ReadOnlySpan<byte> LoadSlideChain(
+        private void LoadSlideChain(
             in SimaiTiming timing,
             in SimaiNote note,
-            ReadOnlySpan<byte> lastContent,
-            ref int sameTapCount,
+            ReadOnlySpan<SlidePart> parts,
+            ReadOnlySpan<SlidePart> lastParts,
+            SimaiNotePos lastStart,
             ref int sameSlideCount,
             ref float loadedSlideLength,
             ref double loadedSlideTime)
         {
-            var noteContent = note.SlideContent;
+            var startPos = note.StartPos.GetPosNum();
+            var endPos = parts[^1].End.GetPosNum();
 
             SlideMetadata metadata;
-            if (noteContent.Contains((byte)'w'))
+            if (parts.Length == 1 && parts[0].Type == SlideType.FAN)
             {
-                metadata = SlideTableNeo.GetWifiSlide(Encoding.UTF8.GetString(noteContent[0..3]));
+                metadata = SlideTableNeo.GetWifiSlide(startPos);
 
                 var judgeQueueCount = metadata.JudgeAreaQueue.Length;
                 loadedSlideAreaArrays.Add(metadata.JudgeAreaQueue);
@@ -697,8 +707,8 @@ namespace MajdataViewX.Managers
                 {
                     tapTime = (float)timing.Time,
                     shootTime = (float)(timing.Time + note.SlideShootDelay),
-                    startPos = noteContent[0] - '0',
-                    endPos = noteContent[2] - '0',
+                    startPos = startPos,
+                    endPos = endPos,
                     LastFor = (float)note.Duration,
                     hspeed = timing.HSpeed,
 
@@ -726,39 +736,63 @@ namespace MajdataViewX.Managers
 
                     isEnd = true
                 };
-                ApplySlideFolding(ref slide, noteContent, lastContent, ref sameSlideCount);
+                ApplySlideFolding(ref slide, note.StartPos, parts, lastStart, lastParts, ref sameSlideCount);
                 slide.Init();
                 slides.Add(slide);
 
                 if (!note.IsMine &&
                     NoteHelper.Settings.AutoPlayMode is AutoPlayMode.DJAutoButton or AutoPlayMode.DJAutoSensor &&
                     sameSlideCount == 1) // slide跟别人一样就不用鸟
-                    unsafe
-                    {
-                        // wifi 双手：发射两个 play(side -1/+1)，FindNext 按偏移后中点就近分配，无强制左绑左右绑右
-                        plays.Add(new DJAutoPlayData(
-                            slides.Length - 1,
-                            DJAUTO_WIFI_RADIUS,
-                            slide.shootTime,
-                            slide.shootTime + slide.LastFor,
-                            isWifi: true,
-                            wifiSide: -1));
-                        plays.Add(new DJAutoPlayData(
-                            slides.Length - 1,
-                            DJAUTO_WIFI_RADIUS,
-                            slide.shootTime,
-                            slide.shootTime + slide.LastFor,
-                            isWifi: true,
-                            wifiSide: +1));
-                    }
+                {
+                    // wifi 双手：发射两个 play(side -1/+1)，FindNext 按偏移后中点就近分配，无强制左绑左右绑右
+                    plays.Add(new DJAutoPlayData(
+                        slides.Length - 1,
+                        DJAUTO_WIFI_RADIUS,
+                        slide.shootTime,
+                        slide.shootTime + slide.LastFor,
+                        isWifi: true,
+                        wifiSide: -1));
+                    plays.Add(new DJAutoPlayData(
+                        slides.Length - 1,
+                        DJAUTO_WIFI_RADIUS,
+                        slide.shootTime,
+                        slide.shootTime + slide.LastFor,
+                        isWifi: true,
+                        wifiSide: +1));
+                }
 
                 areaPoolIndex += judgeQueueCount + judgeQueueLCount + judgeQueueRCount;
                 posePoolIndex += slideArrowsCount;
             }
             else
             {
-                var slideMetaDatas = GetSlidesFromRawContent(noteContent, out var startPos, out var endPos);
-                metadata = slideMetaDatas.Count == 1 ? slideMetaDatas[0] : SlideTableNeo.MakeConnSlide(slideMetaDatas);
+                if (parts.Length == 1)
+                {
+                    metadata = parts[0].Type == SlideType.K_CMD
+                        ? SlideTableNeo.MakeCustomSlide(startPos, parts)
+                        : SlideTableNeo.GetStandardSlide(startPos, parts[0]);
+                }
+                else
+                {
+                    var from = startPos;
+                    var slideMetadatas = new List<SlideMetadata>(parts.Length);
+                    for (var i = 0; i < parts.Length; i++)
+                    {
+                        if (parts[i].Type is >= SlideType.A_CMD and <= SlideType.K_CMD)
+                        {
+                            var first = i;
+                            while (i < parts.Length && parts[i].Type != SlideType.K_CMD) i++;
+                            if (i == parts.Length) throw new ArgumentException("Unterminated slide-code");
+                            slideMetadatas.Add(SlideTableNeo.MakeCustomSlide(from, parts.Slice(first, i - first + 1)));
+                        }
+                        else
+                        {
+                            slideMetadatas.Add(SlideTableNeo.GetStandardSlide(from, parts[i]));
+                        }
+                        from = parts[i].End.GetPosNum();
+                    }
+                    metadata = slideMetadatas.Count == 1 ? slideMetadatas[0] : SlideTableNeo.MakeConnSlide(slideMetadatas);
+                }
 
                 var unskippable1 = -1;
                 var unskippable2 = -1;
@@ -818,7 +852,7 @@ namespace MajdataViewX.Managers
 
                     isEnd = true
                 };
-                ApplySlideFolding(ref slide, noteContent, lastContent, ref sameSlideCount);
+                ApplySlideFolding(ref slide, note.StartPos, parts, lastStart, lastParts, ref sameSlideCount);
                 slide.Init();
                 slides.Add(slide);
 
@@ -841,18 +875,18 @@ namespace MajdataViewX.Managers
 
             loadedSlideLength += metadata.SlideLength;
             loadedSlideTime += note.Duration;
-
-            return noteContent;
         }
-
         private void ApplySlideFolding(
             ref SlideData slide,
-            ReadOnlySpan<byte> noteContent,
-            ReadOnlySpan<byte> lastContent,
+            SimaiNotePos start,
+            ReadOnlySpan<SlidePart> parts,
+            SimaiNotePos lastStart,
+            ReadOnlySpan<SlidePart> lastParts,
             ref int sameSlideCount)
         {
             var matchesPrevious =
-                lastContent.SequenceEqual(noteContent) &&
+                start == lastStart &&
+                SlidePartsEqual(lastParts, parts) &&
                 slides.Length > 0 &&
                 slides[^1].IsFoldablePropOnly(slide);
 
@@ -862,6 +896,16 @@ namespace MajdataViewX.Managers
                 slides.ElementRef(slides.Length - 3).isFolded = true;
             }
         }
+        private static bool SlidePartsEqual(ReadOnlySpan<SlidePart> left, ReadOnlySpan<SlidePart> right)
+        {
+            if (left.Length != right.Length) return false;
+            for (var i = 0; i < left.Length; i++)
+                if (left[i].Type != right[i].Type || left[i].End != right[i].End)
+                    return false;
+            return true;
+        }
+        
+        
 
         private void OnNoteLoadFailed(SimaiNote note, Exception e)
         {
@@ -960,129 +1004,5 @@ namespace MajdataViewX.Managers
 
 
 
-        // ============== Slide shape detection ==============
-        // TODO: 略显丑陋
-        private static IList<SlideMetadata> GetSlidesFromRawContent(ReadOnlySpan<byte> rawContent,
-            out int startPos, out int endPos)
-        {
-            startPos = endPos = rawContent[0] - '0';
-            var slideMetadatas = new List<SlideMetadata>(rawContent.Length / 2);
-
-            int lastKey = -1;
-            ReadOnlySpan<byte> lastShape = ReadOnlySpan<byte>.Empty;
-            bool isSlideCode = false;
-            for (var i = 0; i < rawContent.Length; i++)
-            {
-                var c = rawContent[i];
-
-                if (c is (byte)'[')
-                {
-                    var endIdx = rawContent[i..].IndexOf((byte)']');
-                    if (endIdx == -1) return slideMetadatas;
-
-                    i += endIdx;
-                    continue;
-                }
-
-                if (c is >= (byte)'0' and <= (byte)'9')
-                {
-                    if (isSlideCode)
-                    {
-                        var curKey = c - '0';
-                        if (lastKey != -1 && lastShape != ReadOnlySpan<byte>.Empty)
-                        {
-                            var shape = $"{lastKey}{Encoding.UTF8.GetString(lastShape)}{curKey}";
-                            slideMetadatas.Add(SlideTableNeo.MakeCustomSlide(shape));
-                            lastShape = ReadOnlySpan<byte>.Empty;
-                        }
-                        lastKey = curKey;
-                        endPos = curKey;
-                        isSlideCode = false;
-                    }
-                    else if (lastShape.Length == 1 && lastShape[0] == 'V')
-                    {
-                        if (i + 1 >= rawContent.Length)
-                            return slideMetadatas;
-                        var VKey = c - '0';
-                        var curKey = rawContent[i + 1] - '0';
-                        i++;
-                        if (lastKey != -1 && lastShape != ReadOnlySpan<byte>.Empty)
-                        {
-                            var shape = $"{lastKey}{Encoding.UTF8.GetString(lastShape)}{VKey}{curKey}";
-                            slideMetadatas.Add(SlideTableNeo.GetStandardSlide(shape));
-                            lastShape = ReadOnlySpan<byte>.Empty;
-                        }
-                        lastKey = curKey;
-                        endPos = curKey;
-                    }
-                    else
-                    {
-                        var curKey = c - '0';
-                        if (lastKey != -1 && !lastShape.IsEmpty)
-                        {
-                            if (lastShape.Length == 1 && lastShape[0] == '^')
-                                lastShape = new(new byte[] { TranslateAutoSlide(lastKey, curKey) });
-                            var shape = $"{lastKey}{Encoding.UTF8.GetString(lastShape)}{curKey}";
-                            slideMetadatas.Add(SlideTableNeo.GetStandardSlide(shape));
-                            lastShape = ReadOnlySpan<byte>.Empty;
-                        }
-                        lastKey = curKey;
-                    }
-                }
-                else if (c is (byte)'>' or (byte)'<' or (byte)'^' or (byte)'v' or (byte)'-' or (byte)'V' or (byte)'s' or (byte)'z')
-                {
-                    lastShape = rawContent[i..(i + 1)];
-                }
-                else if (c is (byte)'p' or (byte)'q')
-                {
-                    if (i + 1 < rawContent.Length && rawContent[i + 1] == c)
-                    {
-                        lastShape = rawContent[i..(i + 2)];
-                        i++;
-                    }
-                    else
-                    {
-                        lastShape = rawContent[i..(i + 1)];
-                    }
-                }
-                else if (SlideCodeParser.CommandChars.Contains((char)c))
-                {
-                    var endIdx = rawContent[i..].IndexOf((byte)'K');
-                    if (endIdx == -1)
-                        return slideMetadatas;
-
-                    endIdx += i;
-                    lastShape = rawContent[i..(endIdx + 1)];
-                    isSlideCode = true;
-                    i = endIdx;
-                }
-            }
-
-            return slideMetadatas;
-
-
-            static byte TranslateAutoSlide(int from, int to)
-            {
-                int cw = (to - from + 8) % 8;   // 顺时针距离
-                int ccw = (from - to + 8) % 8;  // 逆时针距离
-
-                if (from is 1 or 2 or 7 or 8)
-                {
-                    if (cw < ccw)
-                        return (byte)'>';
-                    else if (ccw < cw)
-                        return (byte)'<';
-                }
-                else if (from is 3 or 4 or 5 or 6)
-                {
-                    if (cw < ccw)
-                        return (byte)'<';
-                    else if (ccw < cw)
-                        return (byte)'>';
-                }
-
-                throw new Exception("CNM");
-            }
-        }
     }
 }
