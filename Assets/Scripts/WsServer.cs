@@ -2,18 +2,15 @@
 
 using Cysharp.Threading.Tasks;
 using MajdataViewX.Managers;
-using MajProtocol;
-using MajProtocol.Serialization;
-using MajProtocol.Types;
-using MajProtocol.Types.Enums;
-using MajProtocol.Types.Request;
-using MajProtocol.Types.Response;
+using MajdataViewX.Types.MajSetting;
+using MajdataViewX.Types.Protocol;
+using MajProtocol.Generated;
+using MajProtocol.Standard;
+using MajProtocol.Standard.Packets;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Concurrent;
 using System.Net;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -21,23 +18,34 @@ using WebSocketSharp;
 using WebSocketSharp.Server;
 using static MajdataViewX.Base.MajCtx;
 using Debug = UnityEngine.Debug;
-using EventType = MajProtocol.Types.Response.EventType;
 
 namespace MajdataViewX
-{ 
+{
+    /// <summary>
+    /// MajProtocol 2.0 服务端。
+    ///
+    /// 线上是二进制帧：每个包第一个字节是 <see cref="OpCode"/>，其后按 packet 结构体字段顺序排列。
+    /// 分派走 <c>MajProtocol.Standard</c> 生成器产出的 <see cref="IMajProtocolServer.Handle"/>，
+    /// 与协议仓库的示例实现 <c>MajProtocol.Server.WebSocketSharp.MajWebSocketServer</c> 同构。
+    ///
+    /// 与示例的唯一差别：示例的静态单例只把请求转成静态事件、不回应答，而协议里每个请求都有
+    /// 对应的 <c>*Response</c>（只带 <c>accepted</c>），客户端靠它结算在途请求。
+    /// 因此这里保留示例的「WebSocketServer + WebSocketBehavior + Handle 路由」结构，
+    /// 但由 behavior 自己把 <c>*Response</c> 发回发起请求的会话。
+    /// </summary>
     public class WsServer : MonoBehaviour
     {
         public static class Endpoint
         {
             public const int PORT = 8083;
             public const string SERVICE_PATH = "/majdata";
-
-            public static string ServerUrl => $"ws://127.0.0.1:{PORT}{SERVICE_PATH}";
         }
 
-        public static readonly ConcurrentQueue<string> MessageQueue = new();
         private WebSocketServer? _webSocket;
         private CancellationToken _lifetimeCancellationToken;
+
+        /// <summary>待处理请求。<c>Session</c> 用来把响应发回发起方。</summary>
+        internal readonly ConcurrentQueue<(MajdataWsService Session, byte[] Data)> MessageQueue = new();
 
         private void Awake()
         {
@@ -62,13 +70,13 @@ namespace MajdataViewX
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    if (MessageQueue.TryDequeue(out var json))
+                    if (MessageQueue.TryDequeue(out var item))
                     {
-                        while (_playManager == null ||
-                               PlayManager.Summary.State == ViewStatus.Busy)
+                        while (_playManager is null ||
+                               PlayManager.State == ViewStatus.Busy)
                             await UniTask.Yield(PlayerLoopTiming.Update, cancellationToken);
 
-                        await HandleMessageAsync(json);
+                        await item.Session.DispatchAsync(item.Data);
                     }
                     else
                     {
@@ -81,195 +89,20 @@ namespace MajdataViewX
             }
         }
 
-        private async Task HandleMessageAsync(string json)
-        {
-            try
-            {
-                var reqN = MajProtocolSerializer.Deserialize<RequestEnvelope>(json);
-                if (reqN is null)
-                {
-                    Error("empty or invalid json");
-                    Debug.LogError($"request failed: invalid json");
-                    return;
-                }
-
-                var req = reqN.Value;
-                switch (req.RequestType)
-                {
-                    case RequestType.Reset: // TODO
-                        Debug.Log("request finished: Reset");
-                        break;
-                    case RequestType.Setting:
-                        {
-                            var payload = (req.RequestData as JObject)?.ToObject<SettingsPayload>()
-                                          ?? new SettingsPayload();
-                            _playManager.Setting(
-                                payload.ViewSetting ?? new(),
-                                payload.VolumeSetting ?? new());
-                            Response(ResponseType.Ok, PlayManager.Summary);
-                            Debug.Log("request finished: Setting");
-                            break;
-                        }
-                    case RequestType.Load:
-                        {
-                            var loadReq = MajProtocolSerializer.DeserializeRequestPayload<LoadRequest>(req);
-                            await _playManager.LoadAsync(
-                                loadReq?.TrackPath ?? string.Empty,
-                                loadReq?.ImagePath ?? string.Empty,
-                                loadReq?.VideoPath);
-                            BroadcastEvent(EventType.LoadOk, PlayManager.Summary);
-                            Response(ResponseType.Ok, PlayManager.Summary);
-                            Debug.Log("request finished: Load");
-                            break;
-                        }
-                    case RequestType.Parse:
-                        {
-                            // ParseRequest（v1.2 起）含谱面 + 曲目 metadata，一次提交、一次加载。
-                            var parseReq = MajProtocolSerializer.DeserializeRequestPayload<ParseRequest>(req);
-                            await _playManager.ParseAsync(
-                                parseReq?.SimaiFumen,
-                                parseReq?.ClockCount ?? 0,
-                                parseReq?.Offset ?? 0f,
-                                parseReq?.Title ?? string.Empty,
-                                parseReq?.Artist ?? string.Empty,
-                                parseReq?.Level ?? string.Empty,
-                                parseReq?.Designer ?? string.Empty,
-                                parseReq?.Difficulty ?? 0);
-                            Response(ResponseType.Ok, PlayManager.Summary);
-                            Debug.Log("request finished: Parse");
-                            break;
-                        }
-                    case RequestType.Play:
-                        {
-                            var playReqN = MajProtocolSerializer.DeserializeRequestPayload<PlayRequest>(req);
-                            if (playReqN is null)
-                            {
-                                Error("empty play payload");
-                                return;
-                            }
-
-                            var playReq = playReqN.Value;
-                            var prevPlayState = PlayManager.Summary.State;
-                            await _playManager.PlayAsync(
-                                playReq.PlayMode, playReq.StartAt, playReq.Speed,
-                                playReq.MaidataPath ?? string.Empty);
-                            // 首启 (Loaded→Playing) 发 PlayStarted；恢复 (Paused→Playing) 发 PlayResumed。
-                            if (PlayManager.Summary.State == ViewStatus.Playing)
-                            {
-                                var evt = prevPlayState == ViewStatus.Paused
-                                    ? EventType.PlayResumed
-                                    : EventType.PlayStarted;
-                                BroadcastEvent(evt, PlayManager.Summary);
-                            }
-                            Response(ResponseType.Ok, PlayManager.Summary);
-                            Debug.Log("request finished: Play");
-                            break;
-                        }
-                    case RequestType.Pause:
-                        if (_screenRecorder.IsRecording) break;
-                        await _playManager.PauseAsync();
-                        BroadcastEvent(EventType.PlayPaused, PlayManager.Summary);
-                        Response(ResponseType.Ok, PlayManager.Summary);
-                        Debug.Log("request finished: Pause");
-                        break;
-                    case RequestType.Resume:
-                        await _playManager.ResumeAsync();
-                        BroadcastEvent(EventType.PlayResumed, PlayManager.Summary);
-                        Response(ResponseType.Ok, PlayManager.Summary);
-                        Debug.Log("request finished: Resume");
-                        break;
-                    case RequestType.Stop:
-                        await _playManager.StopAsync();
-                        BroadcastEvent(EventType.PlayStopped, PlayManager.Summary);
-                        Response(ResponseType.Ok, PlayManager.Summary);
-                        Debug.Log("request finished: Stop");
-                        break;
-                    case RequestType.State:
-                        Response(ResponseType.Ok, PlayManager.Summary);
-                        Debug.Log("request finished: State");
-                        break;
-                    default:
-                        Error("Not Supported");
-                        Debug.LogError("request failed: Not Supported");
-                        break;
-                }
-            } catch (Exception ex)
-            {
-                Error(ex);
-            }
-        }
-
-        // for self stopping without request
-        public void SendStopResponse()
-        {
-            Response(ResponseType.Ok, PlayManager.Summary);
-        }
-
         /// <summary>
-        /// 序列化并广播一个 ResponseEnvelope。
-        /// <paramref name="summary"/> 走 ResponseData；协议契约规定错误信息塞在 Summary.ErrMsg，
-        /// 因此 <paramref name="error"/> 只用于本地日志和故障注入。
+        /// 记录一条播放器侧故障。
+        ///
+        /// MajProtocol 2.0 的响应只有 <c>accepted</c>，没有错误文本通道，
+        /// 因此这里只落本地日志；协议层用 <c>accepted = false</c> 表达失败。
         /// </summary>
-        private void Response(ResponseType type, ViewSummary? summary = null, string? error = null)
-        {
-            var rsp = new ResponseEnvelope
-            {
-                ProtocolVersion = ProtocolVersion.Current,
-                ResponseType = type,
-                ResponseData = summary is null
-                    ? null
-                    : JToken.FromObject(summary, JsonSerializer.Create(MajProtocolSerializer.DefaultSettings)),
-            };
-            if (error is not null)
-                Debug.LogWarning($"[WsServer] {type} error: {error}");
-
-            // websocket-sharp Broadcast(byte[]) 走二进制帧。保留与老客户端兼容。
-            var json = MajProtocolSerializer.Serialize(rsp);
-            _webSocket?.WebSocketServices[Endpoint.SERVICE_PATH].Sessions.
-                Broadcast(Encoding.UTF8.GetBytes(json));
-        }
-
-        /// <summary>
-        /// 主动推送一个 Event 响应。ResponseData 是 <see cref="EventResponse"/>。
-        /// summary 为 null 时 EventResponse.Summary 也为 null。
-        /// </summary>
-        private void BroadcastEvent(EventType eventType, ViewSummary? summary = null)
-        {
-            var evt = new EventResponse
-            {
-                EventType = eventType,
-                Summary = summary,
-            };
-            var rsp = new ResponseEnvelope
-            {
-                ProtocolVersion = ProtocolVersion.Current,
-                ResponseType = ResponseType.Event,
-                ResponseData = JToken.FromObject(evt, JsonSerializer.Create(MajProtocolSerializer.DefaultSettings)),
-            };
-            var json = MajProtocolSerializer.Serialize(rsp);
-            _webSocket?.WebSocketServices[Endpoint.SERVICE_PATH].Sessions.
-                Broadcast(Encoding.UTF8.GetBytes(json));
-        }
-        
         public void Error<T>(T exception) where T : Exception
         {
-            // 错误消息统一通过 ViewSummary.ErrMsg 上报。PlayManager 已在其 catch 里把 _errMsg / _state
-            // 设置为 Exception.ToString / ViewStatus.Error，所以这里只需发送一份含该状态的 summary。
             Debug.LogException(exception);
-            Response(ResponseType.Error, PlayManager.Summary);
         }
-
+        /// <summary>记录一条播放器侧故障（同上，只落本地日志）。</summary>
         public void Error(string errMsg)
         {
             Debug.LogError($"[WsServer] {errMsg}");
-            // 客户端无法直接拿到 error 字符串（ResponseEnvelope 没有 Error 字段），
-            // 走协议约定的 ViewSummary.ErrMsg 通道：构造一个临时 summary 把它带过去。
-            var summary = new ViewSummary
-            {
-                State = ViewStatus.Error,
-                ErrMsg = errMsg,
-            };
-            Response(ResponseType.Error, summary);
         }
 
         private void OnDestroy()
@@ -280,27 +113,207 @@ namespace MajdataViewX
         }
     }
 
-    public class MajdataWsService : WebSocketBehavior
+    /// <summary>
+    /// 每个 WebSocket 会话一个实例：实现 <see cref="IMajProtocolServer"/> 复用协议生成的
+    /// 按 OpCode 路由，同时能通过 <c>Send</c> 把应答发回本会话。
+    /// </summary>
+    public class MajdataWsService : WebSocketBehavior, IMajProtocolServer
     {
+        // 生成的路由接口是同步 void，天生没法在里面 await：各 On*RequestReceived 只把异步处理
+        // 挂到这里，DispatchAsync 再交给主循环 await，
+        // 这样 Unity API 仍然只在主线程上被访问，请求之间也保持串行。
+        private UniTask _pending = UniTask.CompletedTask;
+
         protected override void OnMessage(MessageEventArgs e)
         {
-            // 文本帧为 JSON 请求；二进制帧按 UTF-8 解码为 JSON（兼容老客户端误发二进制的情况）
-            var json = e.IsBinary ? Encoding.UTF8.GetString(e.RawData) : e.Data;
-            if (string.IsNullOrEmpty(json))
+            if (e.RawData is not { Length: > 0 } rawData)
                 return;
 
-            WsServer.MessageQueue.Enqueue(json);
+            _wsServer.MessageQueue.Enqueue((this, rawData));
         }
-    }
 
-    /// <summary>
-    /// Setting 通道的私有 payload：MajProtocol 没规定 SettingRequest 形状，按决策走 JObject 自由形式。
-    /// 客户端约定 <c>requestData</c> 必须包含 <c>viewSetting</c> + <c>volumeSetting</c> 两个属性；
-    /// 缺失字段视为默认值。
-    /// </summary>
-    internal sealed class SettingsPayload
-    {
-        public MajdataViewX.Types.MajSetting.MajViewSetting? ViewSetting { get; set; }
-        public MajdataViewX.Types.MajSetting.MajVolumeSetting? VolumeSetting { get; set; }
+        /// <summary>处理一个已序列化的请求包，并在主线程上等到它完成。</summary>
+        internal async UniTask DispatchAsync(byte[] data)
+        {
+            var opCode = (OpCode)data[0];
+            _pending = UniTask.CompletedTask;
+
+            try
+            {
+                // 生成的路由：读 data[0] 的 OpCode，转成对应 packet 后调用下面的 On*RequestReceived。
+                ((IMajProtocolServer)this).Handle(data);
+
+                await _pending;
+                Debug.Log($"[WsServer] request finished: {opCode}");
+            }
+            catch (Exception ex)
+            {
+                _wsServer.Error(ex);
+                Debug.LogError($"[WsServer] request failed: {opCode}");
+            }
+        }
+
+        private void Reply(byte[] packet)
+        {
+            try { Send(packet); }
+            catch (Exception ex) { _wsServer.Error(ex); }
+        }
+
+        // ---- 协议路由（IMajProtocolServer）----
+
+        void IMajProtocolServer.OnHandshakeRequestReceived(HandshakeRequest req)
+        {
+            // 与示例实现一致：版本一致时不回包（客户端连上即视为成功），
+            // 不匹配才回 accepted = false 并断开。
+            if (req.protocolVersion == Properties.ProtocolVersion) return;
+
+            _wsServer.Error($"protocol version mismatch: client {req.protocolVersion}, server {Properties.ProtocolVersion}");
+            Reply(new HandshakeResponse { accepted = false }.ToBytes());
+            try { Context.WebSocket.Close(); }
+            catch (Exception ex) { _wsServer.Error(ex); }
+        }
+
+        void IMajProtocolServer.OnFilesRequestReceived(FilesRequest req)
+        {
+            _pending = HandleFilesAsync(req);
+        }
+
+        void IMajProtocolServer.OnSimaiRequestReceived(SimaiRequest req)
+        {
+            _pending = HandleSimaiAsync(req);
+        }
+
+        void IMajProtocolServer.OnPlayRequestReceived(PlayRequest req)
+        {
+            _pending = HandlePlayAsync(req);
+        }
+
+        void IMajProtocolServer.OnPauseRequestReceived(PauseRequest req)
+        {
+            _pending = HandlePauseAsync();
+        }
+
+        void IMajProtocolServer.OnOptionsRequestReceived(OptionsRequest req)
+        {
+            // 纯本地状态更新，无需等待主线程帧，直接同步完成并回应答。
+            _playManager.Setting(ToViewSetting(req), ToVolumeSetting(req));
+            Reply(new OptionsResponse { accepted = true }.ToBytes());
+        }
+
+        void IMajProtocolServer.OnStateRequestReceived(StateRequest req)
+        {
+            Reply(new StateResponse
+            {
+                position = PlayManager.Position,
+                isPlaying = PlayManager.State is ViewStatus.Playing,
+            }.ToBytes());
+        }
+
+        void IMajProtocolServer.OnUnloadRequestReceived(UnloadRequest req)
+        {
+            _pending = HandleUnloadAsync();
+        }
+
+        // ---- 具体处理 ----
+        //
+        // 生成的路由接口把 On*RequestReceived 声明为同步 void，天生没法 await，
+        // 所以上面每个路由只把异步体挂到 _pending 上，由 DispatchAsync 在主线程串行等待。
+
+        private async UniTask HandleFilesAsync(FilesRequest req)
+        {
+            var accepted = await _playManager.LoadAsync(req.trackPath, req.jacketPath, req.moviePath);
+            Reply(new FilesResponse { accepted = accepted }.ToBytes());
+        }
+
+        private async UniTask HandleSimaiAsync(SimaiRequest req)
+        {
+            var accepted = await _playManager.ParseAsync(
+                req.content,
+                (float)req.offset,
+                req.title,
+                req.artist,
+                req.difficultyValue,
+                req.designer,
+                req.difficultyIndex);
+            Reply(new SimaiResponse { accepted = accepted }.ToBytes());
+        }
+
+        private async UniTask HandlePlayAsync(PlayRequest req)
+        {
+            // 协议用两个布尔量表达播放模式，取代了旧版的 PlaybackMode 枚举。
+            var mode = req.record
+                ? PlaybackMode.Record
+                : req.showIntroAnimation
+                    ? PlaybackMode.IncludeOp
+                    : PlaybackMode.Normal;
+
+            var accepted = await _playManager.PlayAsync(mode, req.position, req.speed);
+            Reply(new PlayResponse { accepted = accepted }.ToBytes());
+        }
+
+        private async UniTask HandlePauseAsync()
+        {
+            // 录制中不接受暂停：沿用旧行为，但新协议要求每个请求都有应答，
+            // 否则客户端的在途计数永远不归零、状态会一直卡在 Busy。
+            if (_screenRecorder.IsRecording)
+            {
+                _wsServer.Error("pause rejected: recording in progress");
+                Reply(new PauseResponse { accepted = false }.ToBytes());
+                return;
+            }
+
+            var paused = await _playManager.PauseAsync();
+            // 协议没有 Stop：编辑器用 Pause 表达「停下」。播放器已经不在播放时视为已达成，
+            // 只有真正失败（进 Error）才回 accepted = false。
+            var accepted = paused || PlayManager.State is not ViewStatus.Error;
+            Reply(new PauseResponse { accepted = accepted }.ToBytes());
+        }
+
+        private async UniTask HandleUnloadAsync()
+        {
+            var accepted = await _playManager.UnloadAsync();
+            Reply(new UnloadResponse { accepted = accepted }.ToBytes());
+        }
+
+        /// <summary>
+        /// <see cref="OptionsRequest"/> 只给常用项留了独立字段，其余 ViewSetting 项在
+        /// <c>extra</c> 里以 JSON 传递。键名与 <see cref="MajViewSetting"/> 的
+        /// <c>[JsonProperty]</c> 一致，因此直接反序列化回填即可。
+        /// </summary>
+        private static MajViewSetting ToViewSetting(OptionsRequest req)
+        {
+            var setting = new MajViewSetting
+            {
+                TapSpeed = req.tapSpeed,
+                TouchSpeed = req.touchSpeed,
+            };
+
+            if (!string.IsNullOrWhiteSpace(req.extra))
+            {
+                try
+                {
+                    JsonConvert.PopulateObject(req.extra, setting);
+                }
+                catch (Exception ex)
+                {
+                    _wsServer.Error(ex);
+                }
+            }
+
+            return setting;
+        }
+
+        private static MajVolumeSetting ToVolumeSetting(OptionsRequest req) => new()
+        {
+            Track = req.trackVolume,
+            Answer = req.answerVolume,
+            Tap = req.tapVolume,
+            Slide = req.slideVolume,
+            Break = req.breakVolume,
+            BreakSlide = req.breakSlideVolume,
+            Ex = req.exVolume,
+            Touch = req.touchVolume,
+            Hanabi = req.hanabiVolume,
+        };
     }
 }

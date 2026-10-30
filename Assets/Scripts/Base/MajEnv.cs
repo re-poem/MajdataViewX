@@ -20,5 +20,6 @@ namespace MajdataViewX.Base
             Path.Combine(MajBase, relativePath);
 
         public static string MmfAudioTimePath => GetPath("majdata_time.dat");
+        public static string RecordingDirectory => GetPath("Record");
     }
 }

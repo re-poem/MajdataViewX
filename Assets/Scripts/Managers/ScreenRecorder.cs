@@ -187,7 +187,7 @@ namespace MajdataViewX.Managers
                 encoder,
                 pcmDataPointer,
                 checked(sampleCount * sizeof(float)),
-                AudioManager.SAMPLERATE,
+                AudioManager.SAMPLE_RATE,
                 AudioManager.CHANNELS);
             if (muxResult < 0)
                 throw new InvalidOperationException(

@@ -110,14 +110,13 @@ namespace MajdataViewX.Managers
 
         private void DestroyLoadedBackground()
         {
-            if (Bg != null)
-            {
-                if (Bg.texture != null)
-                    Destroy(Bg.texture);
+            if (Bg == null) return;
 
-                Destroy(Bg);
-                Bg = null;
-            }
+            if (Bg.texture != null)
+                Destroy(Bg.texture);
+
+            Destroy(Bg);
+            Bg = null;
         }
 
         public void ShowBg()
@@ -177,27 +176,13 @@ namespace MajdataViewX.Managers
             }
         }
 
-        public void PauseVideo()
-        {
-            if (!HasVideo) return;
-            _videoPlayer.Pause();
-            _videoPaused = true;
-        }
-
-        public void ResumeVideo()
-        {
-            if (!HasVideo) return;
-            _videoPlayer.Play();
-            _videoPaused = false;
-        }
-
 
         public void ResetState()
         {
             _videoPlayer.Stop();
             _videoPaused = false;
             // 不销毁上一曲背景图(Texture2D/Sprite)，下次 LoadBG 销毁
-            gameObject.transform.localScale = new Vector3(CIRCLED_SCALE_X, CIRCLED_SCALE_X, CIRCLED_SCALE_X);
+            gameObject.transform.localScale = new(CIRCLED_SCALE_X, CIRCLED_SCALE_X, CIRCLED_SCALE_X);
             _spriteRender.material = circledBgMaterial;
             _spriteRender.sprite = defaultBg;
             _smoothRDelta = 0f;
@@ -209,14 +194,13 @@ namespace MajdataViewX.Managers
         private void OnDestroy()
         {
             DestroyLoadedBackground();
-            if (_emptySprite != null)
-            {
-                var texture = _emptySprite.texture;
-                Destroy(_emptySprite);
-                if (texture != null)
-                    Destroy(texture);
-                _emptySprite = null;
-            }
+            if (_emptySprite == null) return;
+
+            var texture = _emptySprite.texture;
+            Destroy(_emptySprite);
+            if (texture != null)
+                Destroy(texture);
+            _emptySprite = null;
         }
     }
 }

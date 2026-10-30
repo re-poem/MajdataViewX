@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>MajProtocol.Standard</id>
+    <version>2.0.1</version>
+    <authors>re-poem, fumiko</authors>
+    <license type="expression">GPL-3.0-only</license>
+    <licenseUrl>https://licenses.nuget.org/GPL-3.0-only</licenseUrl>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/re-poem/MajProtocol</projectUrl>
+    <description>Packet types and property constants for the MajProtocol binary protocol. Ships the packet serialization source generator as an analyzer.</description>
+    <tags>simai majdata protocol websocket binary-protocol</tags>
+    <repository type="git" url="https://github.com/re-poem/MajProtocol.git" branch="refs/heads/master" commit="b81e24ecd8c632fca41393fa01274750b9999665" />
+    <dependencies>
+      <group targetFramework=".NETStandard2.1" />
+    </dependencies>
+  </metadata>
+</package>

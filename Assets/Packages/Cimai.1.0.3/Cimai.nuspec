@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>Cimai</id>
+    <version>1.0.3</version>
+    <title>Cimai</title>
+    <authors>RE_Poem</authors>
+    <projectUrl>https://github.com/re-poem/cimai</projectUrl>
+    <description>Fast and lightweight Simai chart parser written in pure C.</description>
+    <repository type="git" commit="1f9fe149a3964121a7f5b74e731bf22a6c2258df" />
+    <dependencies>
+      <group targetFramework="net10.0" />
+      <group targetFramework="net9.0" />
+      <group targetFramework=".NETStandard2.1" />
+    </dependencies>
+  </metadata>
+</package>

@@ -44,21 +44,21 @@ namespace MajdataViewX.Managers
         private readonly List<AudioSample> _noteSfx = new(SFX_COUNT);
 
         //for recording
-        private List<float[]> noteSfxSamplesData = new(SFX_COUNT);
-        private NativeArray<float> recordingBuffer;
-        private int recordingSampleCount;
-        private int recordingPreviousTouchHoldCount;
-        private float recordingInitialAudioTime;
-        private float recordingSpeed = 1f;
-        private float recordingInitialNoteTime;
-        private int[][] sfxPlayPointers = new int[SFX_COUNT][]; //-1 is not playing
+        private readonly List<float[]> _noteSfxSamplesData = new(SFX_COUNT);
+        private NativeArray<float> _recordingBuffer;
+        private int _recordingSampleCount;
+        private int _recordingPreviousTouchHoldCount;
+        private float _recordingInitialAudioTime;
+        private float _recordingSpeed = 1f;
+        private float _recordingInitialNoteTime;
+        private readonly int[][] _sfxPlayPointers = new int[SFX_COUNT][]; //-1 is not playing
 
         /// <summary>
         /// 只用于调整音频的延迟，视频/note/时间轴显示均不变化
         /// </summary>
         public double GlobalAudioOffset { get; private set; }
 
-        public const int SAMPLERATE = 44100;
+        public const int SAMPLE_RATE = 44100;
         public const int CHANNELS = 2;
 
         public const float TRACK_ANSWER_PLAYBACK_OFFSET_SEC = (16.66666f * 1) / 1000;
@@ -80,19 +80,20 @@ namespace MajdataViewX.Managers
         public const int TRACK_START = 14;
         public const int ALL_PERFECT = 15;
 
-        private bool waitingForTrackAudioStart;
-        public bool IsShowingSongDetail => _timeProvider.AudioTime <= recordingInitialAudioTime + TimeProvider.SONG_DETAIL_OFFSET;
-
-        private bool isInited;
+        private bool _waitingForTrackAudioStart;
+        private bool IsShowingSongDetail => _timeProvider.AudioTime <= _recordingInitialAudioTime + TimeProvider.SONG_DETAIL_OFFSET;
 
         public int ActiveTouchHoldCount { get; set; }
         private int _prevActiveTouchHoldCount;
+
+
+        private readonly bool _isInitialized;
 
         public unsafe AudioManager()
         {
             _audioManager = this;
             SfxRequestsPtr = (bool*)noteSfxPlaybackRequests.GetUnsafePtr();
-            Bass.Init(-1, SAMPLERATE);
+            Bass.Init(-1, SAMPLE_RATE);
 
             //Note SFX
             var sfxPath = MajEnv.GetPath("SFX");
@@ -140,16 +141,16 @@ namespace MajdataViewX.Managers
                     _ => 1
                 };
                 var sample = new AudioSample(path, maxNoOfPlaybacks) { SampleType = type };
-                sfxPlayPointers[sfxIndex] = new int[maxNoOfPlaybacks];
+                _sfxPlayPointers[sfxIndex] = new int[maxNoOfPlaybacks];
                 sfxIndex++;
 
                 _noteSfx.Add(sample);
 
                 //data
-                noteSfxSamplesData.Add(GetSampleDataFromFile(path));
+                _noteSfxSamplesData.Add(GetSampleDataFromFile(path));
             }
 
-            isInited = true;
+            _isInitialized = true;
         }
 
         public void Setting(double globalAudioOffset, MajVolumeSetting v)
@@ -199,7 +200,7 @@ namespace MajdataViewX.Managers
 
         public unsafe void OnUpdate()
         {
-            if (!isInited || _timeProvider.IsRecord) return;
+            if (!_isInitialized || _timeProvider.IsRecord) return;
 
             // 预览时不要有声音
             if (_timeProvider.IsStart)
@@ -316,7 +317,7 @@ namespace MajdataViewX.Managers
             _trackSample.Speed = _timeProvider.CurrentSpeed;
             _trackSample.Volume = _trackSampleVolume;
 
-            waitingForTrackAudioStart = true;
+            _waitingForTrackAudioStart = true;
             WaitForTrackAudioStart().Forget();
 
             async UniTask WaitForTrackAudioStart()
@@ -324,41 +325,21 @@ namespace MajdataViewX.Managers
                 var offset = TRACK_ANSWER_PLAYBACK_OFFSET_SEC + GlobalAudioOffset;
                 while (_timeProvider.AudioTime - offset < 0)
                 {
-                    if (waitingForTrackAudioStart == false) return; //canceled
+                    if (_waitingForTrackAudioStart == false) return; //canceled
                     await UniTask.Yield();
                 }
 
                 _trackSample!.Play();
                 _trackSample!.CurrentSec = _timeProvider.AudioTime - offset;
-                waitingForTrackAudioStart = false;
+                _waitingForTrackAudioStart = false;
             }
         }
 
-        public void PauseTrack() => _trackSample?.Pause();
-
-        public void ResumeTrack() => _trackSample?.Play();
-
-        public void StopTrack()
-        {
-            waitingForTrackAudioStart = false;
-            _trackSample?.Pause();
-        }
-
-        //for pause resume
-        public void PauseTouchHoldSound()
-        {
-            if (_prevActiveTouchHoldCount > 0)
-                _noteSfx[TOUCHHOLD].Pause(); //seen as still playing
-        }
-        public void ResumeTouchHoldSound()
-        {
-            if (_prevActiveTouchHoldCount > 0)
-                _noteSfx[TOUCHHOLD].Play();
-        }
 
         public unsafe void ResetState()
         {
-            StopTrack();
+            _waitingForTrackAudioStart = false;
+            _trackSample?.Pause();
             // 不释放上一曲的音频资源，下次load时自然会被释放
             //StopTouchHoldSound();
             //SfxRequestsPtr[TOUCHHOLD] = false;
@@ -470,26 +451,26 @@ namespace MajdataViewX.Managers
 
         public void BeginRecordingAudio(float initialAudioTime, float speed)
         {
-            recordingInitialAudioTime = initialAudioTime;
-            recordingSpeed = Math.Max(speed, 0.01f);
-            recordingInitialNoteTime = _timeProvider.NoteTime;
+            _recordingInitialAudioTime = initialAudioTime;
+            _recordingSpeed = Math.Max(speed, 0.01f);
+            _recordingInitialNoteTime = _timeProvider.NoteTime;
             var trackOffset = TRACK_ANSWER_PLAYBACK_OFFSET_SEC;
-            var trackOutputStartTime = trackOffset - recordingInitialAudioTime;
+            var trackOutputStartTime = trackOffset - _recordingInitialAudioTime;
             var leadAndTail = trackOutputStartTime
                 + TimeProvider.SONG_DETAIL_OFFSET
                 + _noteSfx[ALL_PERFECT].Length;
-            var totalLen = _trackSample!.Length / recordingSpeed + leadAndTail; // 留给开头演出和结尾AP音效
-            var size = (int)Math.Ceiling(Math.Max(0.1, totalLen) * SAMPLERATE) * CHANNELS;
-            if (recordingBuffer.IsCreated) recordingBuffer.Dispose();
-            recordingBuffer = new NativeArray<float>(size, Allocator.Persistent, NativeArrayOptions.ClearMemory);
-            recordingSampleCount = size;
-            recordingPreviousTouchHoldCount = 0;
-            for (var i = 0; i < sfxPlayPointers.Length; i++)
+            var totalLen = _trackSample!.Length / _recordingSpeed + leadAndTail; // 留给开头演出和结尾AP音效
+            var size = (int)Math.Ceiling(Math.Max(0.1, totalLen) * SAMPLE_RATE) * CHANNELS;
+            if (_recordingBuffer.IsCreated) _recordingBuffer.Dispose();
+            _recordingBuffer = new NativeArray<float>(size, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+            _recordingSampleCount = size;
+            _recordingPreviousTouchHoldCount = 0;
+            for (var i = 0; i < _sfxPlayPointers.Length; i++)
             {
-                if (sfxPlayPointers[i] != null)
+                if (_sfxPlayPointers[i] != null)
                 {
-                    for (var j = 0; j < sfxPlayPointers[i].Length; j++)
-                        sfxPlayPointers[i][j] = -1; // 初始化指针
+                    for (var j = 0; j < _sfxPlayPointers[i].Length; j++)
+                        _sfxPlayPointers[i][j] = -1; // 初始化指针
                 }
             }
             // 按需加载整首PCM：普通播放模式下 TrackSampleData 保持为null，仅导出模式走到这里
@@ -501,7 +482,7 @@ namespace MajdataViewX.Managers
 
         public unsafe void UpdateRecordingAudioFrame(double frameStartTime, double frameEndTime)
         {
-            if (!recordingBuffer.IsCreated)
+            if (!_recordingBuffer.IsCreated)
                 throw new InvalidOperationException("Recording audio has not been initialized.");
             if (frameEndTime < frameStartTime)
                 throw new ArgumentOutOfRangeException(nameof(frameEndTime));
@@ -521,18 +502,18 @@ namespace MajdataViewX.Managers
                 }
 
                 var currentTouchHoldCount = ActiveTouchHoldCount;
-                if (currentTouchHoldCount > recordingPreviousTouchHoldCount)
+                if (currentTouchHoldCount > _recordingPreviousTouchHoldCount)
                 {
-                    var newVoices = currentTouchHoldCount - recordingPreviousTouchHoldCount;
+                    var newVoices = currentTouchHoldCount - _recordingPreviousTouchHoldCount;
                     for (var i = 0; i < newVoices; i++)
                         TriggerSfxRecording(TOUCHHOLD);
                 }
-                else if (currentTouchHoldCount == 0 && recordingPreviousTouchHoldCount > 0)
+                else if (currentTouchHoldCount == 0 && _recordingPreviousTouchHoldCount > 0)
                 {
                     StopSfxRecording(TOUCHHOLD);
                 }
 
-                recordingPreviousTouchHoldCount = currentTouchHoldCount;
+                _recordingPreviousTouchHoldCount = currentTouchHoldCount;
                 UpdateSfxRecording(
                     (float)(frameEndTime - frameStartTime),
                     (float)frameStartTime);
@@ -542,24 +523,24 @@ namespace MajdataViewX.Managers
 
         public void EndRecordingAudio(float recordingElapsedTime)
         {
-            recordingSampleCount = FinalizeRecordingBuffer(recordingElapsedTime);
+            _recordingSampleCount = FinalizeRecordingBuffer(recordingElapsedTime);
         }
 
         public NativeArray<float> GetRecordingBuffer(out int sampleCount)
         {
-            if (!recordingBuffer.IsCreated)
+            if (!_recordingBuffer.IsCreated)
                 throw new InvalidOperationException("Recording audio has not been initialized.");
 
             // The native muxer copies this data synchronously, so AudioManager keeps
             // ownership and releases the buffer only after video_encoder_free returns.
-            sampleCount = recordingSampleCount;
-            return recordingBuffer;
+            sampleCount = _recordingSampleCount;
+            return _recordingBuffer;
         }
 
         private void TriggerSfxRecording(int index)
         {
-            if (index < 0 || index >= noteSfxSamplesData.Count) return;
-            var pointers = sfxPlayPointers[index];
+            if (index < 0 || index >= _noteSfxSamplesData.Count) return;
+            var pointers = _sfxPlayPointers[index];
             if (pointers == null || pointers.Length == 0) return;
 
             var bestIdx = 0;
@@ -581,8 +562,8 @@ namespace MajdataViewX.Managers
         }
         private void StopSfxRecording(int index)
         {
-            if (index < 0 || index >= noteSfxSamplesData.Count) return;
-            var pointers = sfxPlayPointers[index];
+            if (index < 0 || index >= _noteSfxSamplesData.Count) return;
+            var pointers = _sfxPlayPointers[index];
             if (pointers != null)
             {
                 for (var i = 0; i < pointers.Length; i++)
@@ -593,19 +574,19 @@ namespace MajdataViewX.Managers
         private void UpdateSfxRecording(float deltaTime, float recordingElapsedTime)
         {
             // 计算当前帧在 buffer 中的起始采样位置
-            var bufferStartPos = (int)(recordingElapsedTime * SAMPLERATE) * CHANNELS;
+            var bufferStartPos = (int)(recordingElapsedTime * SAMPLE_RATE) * CHANNELS;
             // 这一帧应该写入的采样长度
             // Absolute frame boundaries avoid cumulative rounding gaps at FPS values
             // such as 59, where sampleRate / fps is fractional.
-            var bufferEndPos = (int)((recordingElapsedTime + deltaTime) * SAMPLERATE) * CHANNELS;
+            var bufferEndPos = (int)((recordingElapsedTime + deltaTime) * SAMPLE_RATE) * CHANNELS;
             var samplesToCopy = Math.Max(0, bufferEndPos - bufferStartPos);
 
-            for (var i = 0; i < sfxPlayPointers.Length; i++)
+            for (var i = 0; i < _sfxPlayPointers.Length; i++)
             {
-                if (i == TRACK_START || sfxPlayPointers[i] == null) continue;
+                if (i == TRACK_START || _sfxPlayPointers[i] == null) continue;
 
-                var pointers = sfxPlayPointers[i];
-                var sfxData = noteSfxSamplesData[i];
+                var pointers = _sfxPlayPointers[i];
+                var sfxData = _noteSfxSamplesData[i];
                 var vol = _noteSfx[i].Volume;
 
                 for (var p = 0; p < pointers.Length; p++)
@@ -618,10 +599,10 @@ namespace MajdataViewX.Managers
                         if (sfxIdx < sfxData.Length)
                         {
                             var dstIdx = bufferStartPos + j;
-                            if (dstIdx >= 0 && dstIdx < recordingBuffer.Length)
+                            if (dstIdx >= 0 && dstIdx < _recordingBuffer.Length)
                             {
-                                var mixed = recordingBuffer[dstIdx] + sfxData[sfxIdx] * vol;
-                                recordingBuffer[dstIdx] = Math.Clamp(mixed, -1.0f, 1.0f);
+                                var mixed = _recordingBuffer[dstIdx] + sfxData[sfxIdx] * vol;
+                                _recordingBuffer[dstIdx] = Math.Clamp(mixed, -1.0f, 1.0f);
                             }
                         }
                         else
@@ -642,12 +623,12 @@ namespace MajdataViewX.Managers
             // Flush remaining playing SFXs and calculate max required time
             var maxTime = recordingElapsedTime;
 
-            var bufferStartPos = (int)(recordingElapsedTime * SAMPLERATE) * CHANNELS;
-            for (var i = 0; i < sfxPlayPointers.Length; i++)
+            var bufferStartPos = (int)(recordingElapsedTime * SAMPLE_RATE) * CHANNELS;
+            for (var i = 0; i < _sfxPlayPointers.Length; i++)
             {
-                if (i == TRACK_START || sfxPlayPointers[i] == null) continue;
-                var pointers = sfxPlayPointers[i];
-                var sfxData = noteSfxSamplesData[i];
+                if (i == TRACK_START || _sfxPlayPointers[i] == null) continue;
+                var pointers = _sfxPlayPointers[i];
+                var sfxData = _noteSfxSamplesData[i];
                 var vol = _noteSfx[i].Volume;
 
                 for (var p = 0; p < pointers.Length; p++)
@@ -655,16 +636,16 @@ namespace MajdataViewX.Managers
                     if (pointers[p] != -1)
                     {
                         var remain = sfxData.Length - pointers[p];
-                        var endTime = recordingElapsedTime + ((float)remain / CHANNELS / SAMPLERATE);
+                        var endTime = recordingElapsedTime + ((float)remain / CHANNELS / SAMPLE_RATE);
                         if (endTime > maxTime) maxTime = endTime;
 
                         for (var j = 0; j < remain; j++)
                         {
                             var dstIdx = bufferStartPos + j;
-                            if (dstIdx >= 0 && dstIdx < recordingBuffer.Length)
+                            if (dstIdx >= 0 && dstIdx < _recordingBuffer.Length)
                             {
-                                var mixed = recordingBuffer[dstIdx] + sfxData[pointers[p] + j] * vol;
-                                recordingBuffer[dstIdx] = Math.Clamp(mixed, -1.0f, 1.0f);
+                                var mixed = _recordingBuffer[dstIdx] + sfxData[pointers[p] + j] * vol;
+                                _recordingBuffer[dstIdx] = Math.Clamp(mixed, -1.0f, 1.0f);
                             }
                         }
                         pointers[p] = -1;
@@ -672,32 +653,32 @@ namespace MajdataViewX.Managers
                 }
             }
 
-            recordingSampleCount = Math.Min(
-                (int)Math.Ceiling(maxTime * SAMPLERATE) * CHANNELS,
-                recordingBuffer.Length);
-            recordingSampleCount -= recordingSampleCount % CHANNELS;
-            return recordingSampleCount;
+            _recordingSampleCount = Math.Min(
+                (int)Math.Ceiling(maxTime * SAMPLE_RATE) * CHANNELS,
+                _recordingBuffer.Length);
+            _recordingSampleCount -= _recordingSampleCount % CHANNELS;
+            return _recordingSampleCount;
         }
 
         private void MixStaticRecordingAudio()
         {
             // track start
-            var trackStartSampleData = noteSfxSamplesData[TRACK_START];
+            var trackStartSampleData = _noteSfxSamplesData[TRACK_START];
             for (var i = 0; i < trackStartSampleData.Length; i++)
             {
-                if (i < recordingBuffer.Length)
+                if (i < _recordingBuffer.Length)
                 {
-                    var mixed = recordingBuffer[i] + trackStartSampleData[i] * _noteSfx[TRACK_START].Volume;
-                    recordingBuffer[i] = Math.Clamp(mixed, -1.0f, 1.0f);
+                    var mixed = _recordingBuffer[i] + trackStartSampleData[i] * _noteSfx[TRACK_START].Volume;
+                    _recordingBuffer[i] = Math.Clamp(mixed, -1.0f, 1.0f);
                 }
             }
 
             var trackOffset = TRACK_ANSWER_PLAYBACK_OFFSET_SEC;
-            var initialTrackSec = recordingInitialAudioTime - trackOffset;
+            var initialTrackSec = _recordingInitialAudioTime - trackOffset;
 
             // sample-accurate answers
-            var answerData = noteSfxSamplesData[ANSWER];
-            var answerClockData = noteSfxSamplesData[ANSWER_CLOCK];
+            var answerData = _noteSfxSamplesData[ANSWER];
+            var answerClockData = _noteSfxSamplesData[ANSWER_CLOCK];
             var answerVol = _noteSfx[ANSWER].Volume;
             var answerClockVol = _noteSfx[ANSWER_CLOCK].Volume;
 
@@ -706,10 +687,10 @@ namespace MajdataViewX.Managers
                 // Mirror the real-time trigger at Update():
                 // NoteTime > timing + TRACK_ANSWER_PLAYBACK_OFFSET_SEC.
                 var triggerNoteTime = timing.Timing + TRACK_ANSWER_PLAYBACK_OFFSET_SEC;
-                var exactOutputSec = (triggerNoteTime - recordingInitialNoteTime) / recordingSpeed;
+                var exactOutputSec = (triggerNoteTime - _recordingInitialNoteTime) / _recordingSpeed;
                 if (exactOutputSec < 0) continue;
 
-                var startSample = (int)(exactOutputSec * SAMPLERATE);
+                var startSample = (int)(exactOutputSec * SAMPLE_RATE);
                 var startIdx = startSample * CHANNELS;
 
                 var sfxData = timing.IsClock ? answerClockData : answerData;
@@ -718,20 +699,20 @@ namespace MajdataViewX.Managers
                 for (var i = 0; i < sfxData.Length; i++)
                 {
                     var dstIdx = startIdx + i;
-                    if (dstIdx >= 0 && dstIdx < recordingBuffer.Length)
+                    if (dstIdx >= 0 && dstIdx < _recordingBuffer.Length)
                     {
-                        var mixed = recordingBuffer[dstIdx] + sfxData[i] * vol;
-                        recordingBuffer[dstIdx] = Math.Clamp(mixed, -1.0f, 1.0f);
+                        var mixed = _recordingBuffer[dstIdx] + sfxData[i] * vol;
+                        _recordingBuffer[dstIdx] = Math.Clamp(mixed, -1.0f, 1.0f);
                     }
                 }
             }
-            var trackStartFrameCount = (int)((initialTrackSec + TimeProvider.SONG_DETAIL_OFFSET) * SAMPLERATE);
+            var trackStartFrameCount = (int)((initialTrackSec + TimeProvider.SONG_DETAIL_OFFSET) * SAMPLE_RATE);
             var trackFrameCount = _trackSampleData.Length / CHANNELS;
-            var recordingFrameCount = recordingBuffer.Length / CHANNELS;
+            var recordingFrameCount = _recordingBuffer.Length / CHANNELS;
 
             for (var dstFrame = 0; dstFrame < recordingFrameCount; dstFrame++)
             {
-                var srcFrame = (initialTrackSec * SAMPLERATE) + dstFrame * recordingSpeed;
+                var srcFrame = (initialTrackSec * SAMPLE_RATE) + dstFrame * _recordingSpeed;
                 if (srcFrame < 0 || srcFrame <= trackStartFrameCount) continue;
                 if (srcFrame >= trackFrameCount - 1) break;
 
@@ -744,8 +725,8 @@ namespace MajdataViewX.Managers
                 for (var ch = 0; ch < CHANNELS; ch++)
                 {
                     var sample = Mathf.Lerp(_trackSampleData[srcIdx + ch], _trackSampleData[nextSrcIdx + ch], t);
-                    var mixed = recordingBuffer[dstIdx + ch] + sample * _trackSampleVolume;
-                    recordingBuffer[dstIdx + ch] = Math.Clamp(mixed, -1.0f, 1.0f);
+                    var mixed = _recordingBuffer[dstIdx + ch] + sample * _trackSampleVolume;
+                    _recordingBuffer[dstIdx + ch] = Math.Clamp(mixed, -1.0f, 1.0f);
                 }
             }
 
@@ -753,9 +734,9 @@ namespace MajdataViewX.Managers
 
         public void ReleaseRecordingAudio()
         {
-            if (recordingBuffer.IsCreated) recordingBuffer.Dispose();
-            recordingSampleCount = 0;
-            recordingPreviousTouchHoldCount = 0;
+            if (_recordingBuffer.IsCreated) _recordingBuffer.Dispose();
+            _recordingSampleCount = 0;
+            _recordingPreviousTouchHoldCount = 0;
         }
 
         private float[] GetSampleDataFromFile(string path)
@@ -775,7 +756,7 @@ namespace MajdataViewX.Managers
                 {
                     using var sourceArray = rawData.AsUnsafeNativeArrayScope();
 
-                    var ratio = (float)info.Frequency / SAMPLERATE;
+                    var ratio = (float)info.Frequency / SAMPLE_RATE;
                     var sourceFrames = rawData.Length / 2;
                     var targetFrames = (int)(sourceFrames / ratio);
                     var outputArray = new NativeArray<float>(targetFrames * 2, Allocator.TempJob);

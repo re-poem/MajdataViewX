@@ -8,6 +8,7 @@ using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
 using static MajdataViewX.Base.MajCtx;
+// ReSharper disable InconsistentNaming
 
 namespace MajdataViewX.Managers
 {

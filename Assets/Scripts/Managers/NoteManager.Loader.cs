@@ -10,6 +10,7 @@ using Cimai;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -161,8 +162,8 @@ namespace MajdataViewX.Managers
         /// </remarks>
         private unsafe void LoadTiming(in SimaiTiming timing, ReadOnlySpan<SimaiNote> notes, ReadOnlySpan<SlidePart> slideParts)
         {
-            int touchStartIdx = touches.Length;
-            int touchHoldStartIdx = touchHolds.Length;
+            var touchStartIdx = touches.Length;
+            var touchHoldStartIdx = touchHolds.Length;
 
             var startPositions = stackalloc int[(int)timing.NotesCount];
             var nonMineCount = 0;
@@ -173,10 +174,10 @@ namespace MajdataViewX.Managers
             var loadedSlideLength = stackalloc float[8];
             var loadedSlideTime = stackalloc double[8];
 
-            bool eachLineIgnoreSV = false;
+            var eachLineIgnoreSV = false;
 
-            ReadOnlySpan<SlidePart> lastSlideParts = ReadOnlySpan<SlidePart>.Empty;
-            var lastSlideStart = SimaiNotePos.NONE;
+            var lastSlideParts = ReadOnlySpan<SlidePart>.Empty;
+            var lastSlideStart = SimaiNotePos.BTN0;
             var sameTapCount = 0;
             var sameHoldCount = 0;
             var sameTouchCount = 0;
@@ -194,6 +195,8 @@ namespace MajdataViewX.Managers
                             {
                                 eachLineIgnoreSV |= note.IsIgnoreSV;
                                 startPositions[nonMineCount++] = note.StartPos.GetPosNum();
+                                if (note.IsStar)
+                                    loadedStarIndex[loadedStarCount++] = taps.Length - 1;
                             }
                             break;
                         case SimaiNoteType.HOLD:
@@ -254,26 +257,25 @@ namespace MajdataViewX.Managers
                 var cnt = loadedSlideCount[pos];
                 var length = loadedSlideLength[pos];
                 var time = loadedSlideTime[pos];
-                if (time > 0)
+                if (time <= 0) continue;
+
+                // RotateSpeed = 1 时是每秒转 180 度
+                // 官机算法是 转速 = 同头星星总长 / (总时间 * 15 * pi)
+                // 长度单位像素，时间单位ms，转速单位度/帧，转速最大是 18
+                // 这里 SlideLength 是 100ppu，SlideTime 是秒
+                if (cnt >= 2)
                 {
-                    // RotateSpeed = 1 时是每秒转 180 度
-                    // 官机算法是 转速 = 同头星星总长 / (总时间 * 15 * pi)
-                    // 长度单位像素，时间单位ms，转速单位度/帧，转速最大是 18
-                    // 这里 SlideLength 是 100ppu，SlideTime 是秒
-                    if (cnt >= 2)
-                    {
-                        starTap.IsDouble = true;
-                        // 解决贴图的方式有点丑陋。。。它工作
-                        starTap.Init();
-                    }
-                    starTap.RotateSpeed = math.min(6f, length / ((float)time * 2 * math.PI));
+                    starTap.IsDouble = true;
+                    // 解决贴图的方式有点丑陋。。。它工作
+                    starTap.Init();
                 }
+                starTap.RotateSpeed = math.min(6f, length / ((float)time * 2 * math.PI));
             }
 
 
             // touch group
-            int touchCount = touches.Length - touchStartIdx;
-            int thCount = touchHolds.Length - touchHoldStartIdx;
+            var touchCount = touches.Length - touchStartIdx;
+            var thCount = touchHolds.Length - touchHoldStartIdx;
             // touch 头判与 touchhold 头判分开算 group；touchhold 按下 group 另算
             if (touchCount > 0)
             {
@@ -384,9 +386,6 @@ namespace MajdataViewX.Managers
             return new TouchGroupBuild { MemberGroupIds = memberGroupIds };
         }
 
-        /// <summary>
-        /// 头判 group：仅 touch 之间多数通过。写 touch 的 groupId。
-        /// </summary>
         private void ProcessTouchGroups(int startIdx, int count)
         {
             if (count == 0) return;
@@ -409,11 +408,6 @@ namespace MajdataViewX.Managers
                 touches[startIdx + idx[k]] = t;
             }
         }
-
-        /// <summary>
-        /// touchhold 的头判 group 与按下 group 分开算（均仅 touchhold 之间，互不影响，也不与 touch 头判合并）：
-        /// 头判 group 走 touchGroup 累计计数(多数通过带飞头判)，按下 group 走 touchHoldGroup 每帧重置计数(hold 期间多数按下)。
-        /// </summary>
         private void ProcessTouchHoldGroups(int startIdx, int count)
         {
             if (count == 0) return;
@@ -859,15 +853,15 @@ namespace MajdataViewX.Managers
                 if (!note.IsMine &&
                     NoteHelper.Settings.AutoPlayMode is AutoPlayMode.DJAutoButton or AutoPlayMode.DJAutoSensor &&
                     sameSlideCount == 1) // slide跟别人一样就不用鸟
-                    unsafe
-                    {
-                        plays.Add(new DJAutoPlayData(
-                            slides.Length - 1,
-                            DJAUTO_HAND_RADIUS,
-                            slide.shootTime,
-                            slide.shootTime + slide.LastFor,
-                            false));
-                    }
+                {
+                    plays.Add(new DJAutoPlayData(
+                        slides.Length - 1,
+                        DJAUTO_HAND_RADIUS,
+                        slide.shootTime,
+                        slide.shootTime + slide.LastFor,
+                        false));
+                }
+
 
                 areaPoolIndex += judgeQueueCount;
                 posePoolIndex += slideArrowsCount;
@@ -896,6 +890,7 @@ namespace MajdataViewX.Managers
                 slides.ElementRef(slides.Length - 3).isFolded = true;
             }
         }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool SlidePartsEqual(ReadOnlySpan<SlidePart> left, ReadOnlySpan<SlidePart> right)
         {
             if (left.Length != right.Length) return false;
@@ -904,8 +899,8 @@ namespace MajdataViewX.Managers
                     return false;
             return true;
         }
-        
-        
+
+
 
         private void OnNoteLoadFailed(SimaiNote note, Exception e)
         {
@@ -999,10 +994,6 @@ namespace MajdataViewX.Managers
                 play.IsHandClaimed = false;
             }
         }
-
-
-
-
 
     }
 }

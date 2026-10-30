@@ -2,7 +2,7 @@
 
 using Cysharp.Threading.Tasks;
 using MajdataViewX.Types.Enums;
-using MajProtocol.Types.Enums;
+using MajdataViewX.Types.Protocol;
 using UnityEngine;
 
 using static MajdataViewX.Base.MajCtx;
@@ -29,15 +29,14 @@ namespace MajdataViewX.Managers
 
         private void Update()
         {
-            if (PlayManager.Summary.State is not ViewStatus.Playing)
+            if (PlayManager.State is not ViewStatus.Playing)
                 return;
 
             if (!_objectCounter.AllFinished) return;
             if (_isPlayed)
             {
                 if (allPerfect.gameObject.activeSelf) return;
-                _playManager.StopAsync().Forget();
-                _wsServer.SendStopResponse();
+                _playManager.PauseAsync().Forget();
             }
             else
             {

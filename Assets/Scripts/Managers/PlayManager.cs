@@ -5,33 +5,23 @@ using MajdataViewX.Base;
 using MajdataViewX.Notes;
 using MajdataViewX.Notes.SlideUtils;
 using MajdataViewX.Types.MajSetting;
+using MajdataViewX.Types.Protocol;
 using Cimai;
-using MajProtocol.Types;
-using MajProtocol.Types.Enums;
 using System;
-using System.Collections.Generic;
-using System.ComponentModel.Design;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading;
-using Unity.Properties;
 using UnityEngine;
-using UnityEngine.SocialPlatforms;
 using static MajdataViewX.Base.MajCtx;
 
 namespace MajdataViewX.Managers
 {
     public class PlayManager : MonoBehaviour
     {
-        public static ViewSummary Summary => new()
-        {
-            State = _state,
-            ErrMsg = _errMsg,
-        };
+        public static ViewStatus State { get; private set; } = ViewStatus.Idle;
+        public static string ErrMsg { get; private set; } = string.Empty;
+        public static double Position => _timeProvider?.AudioTime ?? 0;
 
-        private static ViewStatus _state = ViewStatus.Idle;
-        private static string _errMsg = string.Empty;
 
         private static Thread? _audioManagerThread;
         private static int _audioManagerThreadRunning;
@@ -94,11 +84,11 @@ namespace MajdataViewX.Managers
                                         _bgManager.IsBgLoaded &&
                                         _bgManager.IsVideoLoaded;
 
-        public async UniTask LoadAsync(string audioPath, string bgPath, string? pvPath)
+        public async UniTask<bool> LoadAsync(string audioPath, string bgPath, string? pvPath)
         {
-            while (_state is ViewStatus.Busy)
+            while (State is ViewStatus.Busy)
                 await UniTask.Yield();
-            _state = ViewStatus.Busy;
+            State = ViewStatus.Busy;
 
             try
             {
@@ -129,12 +119,14 @@ namespace MajdataViewX.Managers
                     BgManager.HasVideo = false;
                 }
 
-                _state = ViewStatus.Loaded;
+                State = ViewStatus.Loaded;
+                return true;
             }
             catch (Exception ex)
             {
-                _errMsg = ex.ToString();
-                _state = ViewStatus.Error;
+                ErrMsg = ex.ToString();
+                State = ViewStatus.Error;
+                return false;
             }
         }
 
@@ -163,9 +155,8 @@ namespace MajdataViewX.Managers
             _bgManager.resizeBg = _setting.ResizeBg;
         }
 
-        public async UniTask ParseAsync(
+        public async UniTask<bool> ParseAsync(
             string? chartText,
-            int clockCount,
             float offset,
             string title,
             string artist,
@@ -173,11 +164,11 @@ namespace MajdataViewX.Managers
             string designer,
             int difficulty)
         {
-            while (_state is ViewStatus.Busy)
+            while (State is ViewStatus.Busy)
                 await UniTask.Yield();
 
-            var previousState = _state;
-            _state = ViewStatus.Busy;
+            var previousState = State;
+            State = ViewStatus.Busy;
 
             var source = Encoding.UTF8.GetBytes(chartText ?? string.Empty);
             SimaiChart chart;
@@ -190,10 +181,11 @@ namespace MajdataViewX.Managers
             _chart?.Dispose();
             _chart = chart;
             _currentOffset = offset;
-            _timeProvider.offset = offset;
 
             //answer
-            _audioManager.GenerateAnswerSFX(chart, clockCount);
+            // TODO: MajProtocol 2.0 的 SimaiRequest 没有 clock_count 字段，这里先固定为 4，
+            // 之后改为从 Simai 内容的 &clock_count 指令解析。
+            _audioManager.GenerateAnswerSFX(chart, 4);
 
             //counter
             _objectCounter.ResetLoaded();
@@ -202,19 +194,20 @@ namespace MajdataViewX.Managers
 
             await _dataLoader.Load(chart, title, artist, level, designer, difficulty);
 
-            _state = previousState;
+            State = previousState;
+            return true;
         }
 
-        public async UniTask PlayAsync(PlaybackMode playmode, double startAt, float speed, string recordPath)
+        public async UniTask<bool> PlayAsync(PlaybackMode playmode, double startAt, float speed)
         {
-            while (_state is ViewStatus.Busy)
+            while (State is ViewStatus.Busy)
                 await UniTask.Yield();
 
-            if (_state is not (ViewStatus.Loaded or ViewStatus.Paused))
-                return;
+            if (State is not (ViewStatus.Loaded or ViewStatus.Paused))
+                return false;
 
             // metadata 与谱面装载都在 Parse 阶段完成，这里只管启动。
-            _state = ViewStatus.Busy;
+            State = ViewStatus.Busy;
             try
             {
                 await UniTask.SwitchToMainThread();
@@ -254,10 +247,8 @@ namespace MajdataViewX.Managers
                         _audioManager.PlayTrack();
                         break;
                     case PlaybackMode.Record:
-                        if (!Directory.Exists(recordPath))
-                        {
-                            throw new InvalidPathException($"maidata path is required");
-                        }
+                        var recordPath = MajEnv.RecordingDirectory;
+                        Directory.CreateDirectory(recordPath);
 
                         _canvasButtons.SetActive(false);
                         _allPerfectManager.enabled = true;
@@ -271,94 +262,33 @@ namespace MajdataViewX.Managers
                             }).ContinueWith(() =>
                         {
                             _canvasButtons.SetActive(true);
-                            _state = ViewStatus.Loaded;
+                            State = ViewStatus.Loaded;
                         }).Forget();
                         break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(playmode), playmode, null);
                 }
 
-                _state = ViewStatus.Playing;
-                return;
+                State = ViewStatus.Playing;
+                return true;
             }
             catch (Exception ex)
             {
-                _errMsg = ex.ToString();
-                _state = ViewStatus.Error;
-                return;
+                ErrMsg = ex.ToString();
+                State = ViewStatus.Error;
+                return false;
             }
         }
 
-        public async UniTask PauseAsync()
+        public async UniTask<bool> PauseAsync()
         {
-            while (_state is ViewStatus.Busy)
+            while (State is ViewStatus.Busy)
                 await UniTask.Yield();
 
-            if (_state is not ViewStatus.Playing)
-                return;
+            if (State is not ViewStatus.Playing)
+                return false;
 
-            _state = ViewStatus.Busy;
-            try
-            {
-                await UniTask.SwitchToMainThread();
-
-                _timeProvider.Pause();
-
-                _bgManager.PauseVideo();
-
-                _audioManager.PauseTrack();
-                _audioManager.PauseTouchHoldSound();
-
-                _state = ViewStatus.Paused;
-            }
-            catch (Exception ex)
-            {
-                _errMsg = ex.ToString();
-                _state = ViewStatus.Error;
-            }
-        }
-
-        /// <summary>
-        /// 从暂停中恢复播放（MajProtocol 新增的 Resume 通道对应）。
-        /// </summary>
-        public async UniTask ResumeAsync()
-        {
-            while (_state is ViewStatus.Busy)
-                await UniTask.Yield();
-
-            if (_state is not ViewStatus.Paused)
-                return;
-
-            _state = ViewStatus.Busy;
-            try
-            {
-                await UniTask.SwitchToMainThread();
-
-                _timeProvider.Resume(null);
-
-                _bgManager.ResumeVideo();
-
-                _audioManager.ResumeTrack();
-                _audioManager.ResumeTouchHoldSound();
-
-                _state = ViewStatus.Playing;
-            }
-            catch (Exception ex)
-            {
-                _errMsg = ex.ToString();
-                _state = ViewStatus.Error;
-            }
-        }
-
-        public async UniTask StopAsync()
-        {
-            while (_state is ViewStatus.Busy)
-                await UniTask.Yield();
-
-            if (_state is not (ViewStatus.Playing or ViewStatus.Paused or ViewStatus.Error))
-                return;
-
-            _state = ViewStatus.Busy;
+            State = ViewStatus.Busy;
             try
             {
                 await UniTask.SwitchToMainThread();
@@ -366,21 +296,55 @@ namespace MajdataViewX.Managers
                 _screenRecorder.StopRecording();
                 await UniTask.Yield();
 
-                //_objectCounter.ResetCur();
                 _timeProvider.ResetState();
                 _audioManager.ResetState();
                 _bgManager.ResetState();
                 _effectManager.ResetState();
                 _allPerfectManager.ResetState();
 
-                _state = CheckIsLoaded() ? ViewStatus.Loaded : ViewStatus.Idle;
+                State = CheckIsLoaded() ? ViewStatus.Loaded : ViewStatus.Idle;
+                return true;
             }
             catch (Exception ex)
             {
-                _errMsg = ex.ToString();
-                _state = ViewStatus.Error;
+                ErrMsg = ex.ToString();
+                State = ViewStatus.Error;
+                return false;
             }
         }
+
+        public async UniTask<bool> UnloadAsync()
+        {
+            while (State is ViewStatus.Busy)
+                await UniTask.Yield();
+
+            if (State is ViewStatus.Playing or ViewStatus.Paused)
+            {
+                if (!await PauseAsync()) return false;
+            }
+
+            State = ViewStatus.Busy;
+            try
+            {
+                await UniTask.SwitchToMainThread();
+
+                _chart?.Dispose();
+                _chart = null;
+                _currentOffset = 0;
+
+                _objectCounter.ResetLoaded();
+
+                State = ViewStatus.Idle;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                ErrMsg = ex.ToString();
+                State = ViewStatus.Error;
+                return false;
+            }
+        }
+
 
         private void OnDestroy()
         {

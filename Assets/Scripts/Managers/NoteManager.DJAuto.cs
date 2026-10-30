@@ -1,21 +1,15 @@
 using MajdataViewX.Base;
 using MajdataViewX.Notes;
-using MajdataViewX.Notes.NoteDatas;
-using MajdataViewX.Notes.SlideUtils;
-using MajdataViewX.Types.Enums;
 using MajdataViewX.Types.Input;
 using MajdataViewX.Types.Rendering;
 using MajdataViewX.Utils;
 using MajdataViewX.Utils.Extensions;
-using Cimai;
 using System.Collections.Generic;
 using System.Threading;
 using Unity.Burst;
 using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
-using UnityEngine;
 using static MajdataViewX.Base.MajBurst;
 
 namespace MajdataViewX.Managers
@@ -65,7 +59,7 @@ namespace MajdataViewX.Managers
         /// <summary>一组touch(hold)中，当存在end time大于start+此值的项时，重算一次手位。之后的重算有所不同</summary>
         private const float TOUCH_HIT_SHORT_SPLIT_THRESHOLD = 5f * MajCtx.FRAME_LENGTH_SEC + (float)MajGeo.Epsilon;
         /// <summary>双圆枚举的 3 点最小覆盖圆候选仅在 n ≤ 此值时启用。大 n 降级为 1/2 点候选以保全性能。</summary>
-        private const int TWO_CIRCLE_3POINT_CANDIDATE_MAX_N = 16;
+        private const int TWO_CIRCLE_3_POINT_CANDIDATE_MAX_N = 16;
 
 
 
@@ -382,7 +376,7 @@ namespace MajdataViewX.Managers
             for (int i = 0; i < m; i++)
                 for (int j = i + 1; j < m; j++)
                     ConsiderFirst(posArr, countArr, m, handRadius, maxRadius, MinEnclosing2(posArr[i], posArr[j]), ref best);
-            if (m <= TWO_CIRCLE_3POINT_CANDIDATE_MAX_N)
+            if (m <= TWO_CIRCLE_3_POINT_CANDIDATE_MAX_N)
                 for (int i = 0; i < m; i++)
                     for (int j = i + 1; j < m; j++)
                         for (int k = j + 1; k < m; k++)
@@ -489,7 +483,7 @@ namespace MajdataViewX.Managers
             for (int i = 0; i < n; i++)
                 for (int j = i + 1; j < n; j++)
                     ConsiderSingle(pts, counts, n, handRadius, maxRadius, MinEnclosing2(pts[i], pts[j]), ref bestC, ref bestR, ref bestCov);
-            if (n <= TWO_CIRCLE_3POINT_CANDIDATE_MAX_N)
+            if (n <= TWO_CIRCLE_3_POINT_CANDIDATE_MAX_N)
                 for (int i = 0; i < n; i++)
                     for (int j = i + 1; j < n; j++)
                         for (int k = j + 1; k < n; k++)
@@ -863,7 +857,7 @@ namespace MajdataViewX.Managers
 
             public void Execute()
             {
-                var time = TimeData.DJAutoTime;
+                var time = TimeData.NoteTime;
                 // 先各自更新状态，再统一按权重分配尚未占用的 data。
                 UpdateHandState(0, time);
                 UpdateHandState(1, time);
