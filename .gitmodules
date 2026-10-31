@@ -1,0 +1,3 @@
+[submodule "ThirdParty/FFmpeg.AutoGen"]
+	path = ThirdParty/FFmpeg.AutoGen
+	url = https://github.com/TeamMajdata/FFmpeg.AutoGen

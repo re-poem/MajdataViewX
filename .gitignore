@@ -65,3 +65,5 @@ Assets/Plugins/UniTask/
 # Local FFmpeg/x264 source trees and build intermediates
 /ffmpeg-builder/.work/
 /ffmpeg-builder/dist/
+
+Record/

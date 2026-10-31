@@ -1,7 +1,6 @@
 #nullable enable
 using MajdataPlay.Diagnostics;
 using MajdataPlay.FFmpeg.Internal;
-using MajdataPlay.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -557,8 +556,7 @@ namespace MajdataPlay.FFmpeg
             if (enabled && camera != null && action != null)
             {
                 var pipeline = GraphicsSettings.currentRenderPipeline;
-                route = pipeline is MajRenderPipelineAsset ? CaptureBridgeRoute.Maj
-                    : pipeline != null ? CaptureBridgeRoute.Core : CaptureBridgeRoute.None;
+                route = pipeline != null ? CaptureBridgeRoute.Core : CaptureBridgeRoute.None;
             }
 
             if (_captureBridge == route)
@@ -570,11 +568,7 @@ namespace MajdataPlay.FFmpeg
             // Core RP's own null guard remains responsible for its existing destroyed-camera behavior.
             if (!ReferenceEquals(camera, null) && action != null)
             {
-                if (_captureBridge == CaptureBridgeRoute.Maj)
-                {
-                    MajCameraCaptureBridge.RemoveCaptureAction(camera, action);
-                }
-                else if (_captureBridge == CaptureBridgeRoute.Core)
+                if (_captureBridge == CaptureBridgeRoute.Core)
                 {
                     CameraCaptureBridge.RemoveCaptureAction(camera, action);
                 }
@@ -586,11 +580,7 @@ namespace MajdataPlay.FFmpeg
                 return;
             }
 
-            if (route == CaptureBridgeRoute.Maj)
-            {
-                MajCameraCaptureBridge.AddCaptureAction(camera, action);
-            }
-            else if (route == CaptureBridgeRoute.Core)
+            if (route == CaptureBridgeRoute.Core)
             {
                 CameraCaptureBridge.AddCaptureAction(camera, action);
             }

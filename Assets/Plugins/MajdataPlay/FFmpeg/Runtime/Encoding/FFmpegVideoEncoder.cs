@@ -4,7 +4,6 @@ using FFmpeg.AutoGen;
 using MajdataPlay.Diagnostics;
 using MajdataPlay.FFmpeg.Internal;
 using MajdataPlay.FFmpeg.Interop;
-using MajdataPlay.IO.Storage;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -853,7 +852,7 @@ namespace MajdataPlay.FFmpeg
         private void OpenLocalFile(string path)
         {
             _cancellation.ThrowIfCancellationRequested();
-            _output = FileSystem.File.OpenWrite(path);
+            _output = File.OpenWrite(path);
             _selfHandle = GCHandle.Alloc(this);
             var buffer = (byte*)ffmpeg.av_malloc(65536);
             if (buffer == null)
