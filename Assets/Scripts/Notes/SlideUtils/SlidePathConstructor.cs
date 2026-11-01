@@ -102,14 +102,19 @@ namespace MajdataViewX.Notes.SlideUtils
             var circle = new CircleStruct(center, diff.Magnitude);
             var startRad = diff.Phase;
             // startAngle and endAngle in range [-PI, PI]
-            if (isCcw)
+            // 同一个方向可能分别落在 PI 和 -PI 两侧（例如 5q8、8p5 的切点恰好在正左方），所以要按 2PI 取模判断是否重合
+            // IEEERemainder的余数是把商四舍五入以后算得的余数，有正负
+            var isSameAngle = Math.Abs(Math.IEEERemainder(endRad - startRad, 2 * Math.PI)) < MajGeo.EpsilonRad;
+            if (isSameAngle)
             {
-                if (Math.Abs(endRad - startRad) < MajGeo.EpsilonRad)
+                if (skipIfZero)
                 {
-                    if (skipIfZero) return this;
-                    endRad += 2 * Math.PI;
+                    return this;
                 }
-
+                endRad = isCcw ? startRad + 2 * Math.PI : startRad - 2 * Math.PI;
+            }
+            else if (isCcw)
+            {
                 if (startRad > endRad)
                 {
                     startRad -= 2 * Math.PI;
@@ -117,18 +122,11 @@ namespace MajdataViewX.Notes.SlideUtils
             }
             else
             {
-                if (Math.Abs(endRad - startRad) < MajGeo.EpsilonRad)
-                {
-                    if (skipIfZero) return this;
-                    endRad -= 2 * Math.PI;
-                }
-
                 if (startRad < endRad)
                 {
                     startRad += 2 * Math.PI;
                 }
             }
-
             var seg = new ArcSegment(circle, startRad, endRad);
             PathSegments.Add(seg);
             CurrentEndPoint = seg.GetPointAt(1f);

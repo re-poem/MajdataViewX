@@ -528,8 +528,10 @@ namespace MajdataViewX.Notes.SlideUtils
             for (var diff = 0; diff <= 7; diff++)
             {
                 // 大圆逆时针
-                var phaseNudge = ((diff is 1 or 5 or 7) ? -1 : 1) * MajGeo.EpsilonRad / 2;
+                var phaseNudge = (diff == 7 ? -1 : 1) * MajGeo.EpsilonRad / 2;
                 // 官机上 1<2 1<6 1<8 会在 conn-slide 里有缝，剩下 5 种无缝，还原一下
+                // 我想了想还是只保留 1<8（也就是一格弧线）的缝吧蛤蛤反正更长的可以靠拼
+                // （两格长的没辙，但官机上也没辙）
                 var pathCircle = SlidePathConstructor.BeginAt((int)SensorType.A1)
                     .ArcToAngle(9, MajGeo.GetPoint(diff).Phase + phaseNudge, true, false)
                     .GeneratePath();
