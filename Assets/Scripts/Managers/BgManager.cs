@@ -41,8 +41,6 @@ namespace MajdataViewX.Managers
         private Animator _detailAnim = null!;
         private FFmpegVideoPlayer _videoPlayer = null!;
 
-        private float _smoothRDelta;
-
         private const float FULLSCREEN_SCALE_X = 1.777f;
         private const int VIDEO_LOAD_TIMEOUT_SECONDS = 15;
 
@@ -74,6 +72,7 @@ namespace MajdataViewX.Managers
             _videoPlayer = GetComponent<FFmpegVideoPlayer>();
             _videoPlayer.TextureChanged += OnVideoTextureChanged;
             _videoPlayer.ErrorReceived += OnVideoError;
+            _videoClock = () => _timeProvider.AudioTime;
             _detailAnim = _songDetail.GetComponent<Animator>();
 
             _coverDefaultScale = coverRenderer.transform.localScale;
@@ -82,16 +81,15 @@ namespace MajdataViewX.Managers
             DisableVideo();
         }
 
+        /// <summary>视频时钟：主线程每帧更新的 AudioTime，解码线程读它不会碰 Unity API。</summary>
+        private Func<double> _videoClock = null!;
+
         private void Update()
         {
-            // 暂时不搞这个
-            // if (HasVideo && _paused)
-            // {
-            //     _videoPlayer.SeekAsync(_timeProvider.AudioTime);
-            //     _videoPlayer.Play();
-            //     _videoPlayer.Pause();
-            //     return;
-            // }
+            // 离线导出里游戏时间按帧推进、与墙钟脱钩，让播放器跟着游戏时间走；
+            // 否则只能靠 PlaybackRate 追按墙钟推进的视频，误差一大就被压到 1/16，画面像停住。
+            var offline = Time.captureFramerate != 0;
+            _videoPlayer.MediaClock = offline ? _videoClock : null;
 
             if (_timeProvider.AudioTime < 0)
             {
@@ -99,22 +97,20 @@ namespace MajdataViewX.Managers
             }
 
             var delta = (float)_videoPlayer.TimeSeconds - _timeProvider.AudioTime;
-            _smoothRDelta += (Time.unscaledDeltaTime - _smoothRDelta) * 0.01f;
-            // The first frame has no smoothed delta yet.
-            var realSpeed = _smoothRDelta > 0f ? Time.deltaTime / _smoothRDelta : _timeProvider.CurrentSpeed;
-
-            if (Time.captureFramerate != 0)
-            {
-                SetPlaybackRate(realSpeed - delta);
-                return;
-            }
-
+            // 录制时位置已由游戏时间推进，基准倍率是 1；闭环保留，用来吸收素材偏移与解码滞后。
+            var speed = offline ? 1f : _timeProvider.CurrentSpeed;
             SetPlaybackRate(delta switch
             {
-                < -0.1f => _timeProvider.CurrentSpeed + 0.2f,
-                > 0.1f => _timeProvider.CurrentSpeed - 0.2f,
-                _ => _timeProvider.CurrentSpeed
+                < -0.1f => speed + 0.2f,
+                > 0.1f => speed - 0.2f,
+                _ => speed
             });
+
+            // 只在明显不同步时打一条，正常导出不产生噪音。
+            if (offline && Mathf.Abs(delta) > 0.5f)
+            {
+                Debug.Log($"[BgSync] audio={_timeProvider.AudioTime:F3} video={_videoPlayer.TimeSeconds:F3} delta={delta:F3} rate={_videoPlayer.PlaybackRate:F2}");
+            }
         }
 
         /// <summary>Writes a clamped playback rate so the drift controller cannot leave the supported range.</summary>
@@ -249,7 +245,9 @@ namespace MajdataViewX.Managers
             coverRenderer.enabled = false;
             videoRenderer.texture = texture!;
             videoRenderer.enabled = true;
-            ApplyVideoFit(texture);
+            // 纹理还没就绪时用播放器报告的视频尺寸，否则适配被跳过，缩放会停留在上一次的值。
+            ApplyVideoFit(texture != null ? texture.width : (int)_videoPlayer.Width,
+                texture != null ? texture.height : (int)_videoPlayer.Height);
         }
 
         /// <summary>Plays the loaded video in sync with the chart clock once the audio has started.</summary>
@@ -277,7 +275,9 @@ namespace MajdataViewX.Managers
                 }
 
                 var token = this.GetCancellationTokenOnDestroy();
-                while (_timeProvider.AudioTime <= 0)
+                // AudioTime 在播放开始前是从共享内存读到的上一次播放的位置，不能拿它当本次起点去 seek；
+                // 必须等到本次播放真正开始（IsStart）并且已经进入曲子时间。
+                while (!_timeProvider.IsStart || _timeProvider.AudioTime <= 0)
                 {
                     await UniTask.WaitForEndOfFrame(token);
                 }
@@ -318,16 +318,16 @@ namespace MajdataViewX.Managers
         private void OnVideoError(FFmpegVideoPlayer player, string error) => ShowBg();
 
         /// <summary>Fits the video layer to the source aspect and picks the matching material.</summary>
-        /// <param name="texture">The presented frame supplying the source dimensions.</param>
-        private void ApplyVideoFit(Texture? texture)
+        /// <param name="width">The presented frame width in pixels.</param>
+        /// <param name="height">The presented frame height in pixels.</param>
+        private void ApplyVideoFit(int width, int height)
         {
-            if (texture == null)
+            if (width <= 0 || height <= 0)
             {
                 return;
             }
 
-            // Texture dimensions are ints and non-zero here, so the aspect needs no extra guard.
-            var aspect = (float)texture.height / texture.width;
+            var aspect = (float)height / width;
             if (resizeBg)
             {
                 var fullscreen = FULLSCREEN_SCALE_X;
@@ -338,7 +338,10 @@ namespace MajdataViewX.Managers
 
             // The placeholder size comes from the Inspector, so it stays the single source.
             var rect = videoRenderer.rectTransform.rect;
-            var worldHeight = rect.height * videoRenderer.transform.lossyScale.y;
+            // lossyScale 含上一次写入的 localScale，直接相乘会让每次适配都再乘一遍缩放（越算越偏），这里把它除掉。
+            var localY = Mathf.Abs(videoRenderer.transform.localScale.y);
+            var parentScaleY = videoRenderer.transform.lossyScale.y / Mathf.Max(localY, 1e-6f);
+            var worldHeight = rect.height * parentScaleY;
             var circleDiameter = circledBgMaterial.GetFloat(RadiusID) * 2f;
             var fitScale = circleDiameter / (worldHeight * Mathf.Max(1f, aspect));
             SetBackgroundMaterial(circledBgMaterial);
@@ -370,7 +373,6 @@ namespace MajdataViewX.Managers
 
             ShowCover();
             SetBackgroundMaterial(circledBgMaterial);
-            _smoothRDelta = 0f;
 
             if (_songDetail != null)
             {

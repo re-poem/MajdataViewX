@@ -55,10 +55,13 @@ public sealed class VideoExample : MonoBehaviour
 | `PreferredDecoderType` | Software 使用 FFmpeg 软件解码；Hardware 优先硬件后端，依次尝试 GPU 共享、硬件解码加 CPU 上传、软件解码 |
 | `PreferNativeTextures` | 默认 true；false 可直接选择硬件解码加 CPU 上传，便于兼容性排查 |
 | `RequireHardwareDecoding` | 保留已有严格 GPU 模式语义，覆盖上述偏好；硬件共享不支持或运行中失败时报告错误，禁止 CPU 上传及软件回退 |
+| `MediaClock` | 驱动媒体时间轴的单调时钟（秒），null 使用墙钟；`Time.captureFramerate` 这类定步离线渲染应传入游戏时间，视频才会跟着游戏时间走 |
 | `Prepared`, `Started`, `Paused`, `Stopped`, `EndReached`, `SeekCompleted` | 主线程事件 |
 | `TextureChanged`, `FrameReady`, `TimeChanged`, `ErrorReceived` | 输出变化、帧序号、毫秒位置、错误信息 |
 
 所有组件 API 在 Unity 主线程调用。控制时间使用单调时钟，不受 `Time.timeScale` 影响。连续 seek 只保留最后一次请求，旧 `SeekAsync` 被取消。更换 Url / Close / 销毁对象会取消尚未完成的任务；后台线程退出后关闭 FFmpeg。音轨数据包被跳过。预载不是将整个文件读入内存，帧队列默认仅 3 帧，Inspector 可调整到 1–8 帧。
+
+`MediaClock` 默认是墙钟，即使应用暂停或变速视频也按真实时间推进。离线渲染用 `Time.captureFramerate` 让应用每渲染一帧固定前进一个步长，与墙钟无关：此时若仍按墙钟播放，视频位置与游戏时间会持续分叉，只能靠 `PlaybackRate` 追帧，一旦误差超过一秒就会落到 0.0625 的下限，看起来像画面停住。改为传入游戏时间（如 `() => timeProvider.AudioTime`）后，解码帧按游戏时间到期，视频与同一帧的音轨、`FFmpegCameraCapturer` 的定点录制自然对齐，`PlaybackRate` 保持 1 即可；该模式下不再按帧率限制呈现频率，保证每个到期帧都能显示。时钟会被解码线程读取，所以要用主线程更新的字段，不能直接读 `Time.timeAsDouble`。切换时钟时媒体位置连续，不影响实时播放。
 
 Player 和解码线程共用解码会话持有的唯一单调播放时钟，时间读取、倍速和播放状态修改都在会话锁内完成，无需每帧同步两套时钟。播放期间，解码线程在新帧已经到期时淘汰它替代的旧帧，保留最新到期帧和未来帧。满队列时最多额外持有一张待入队候选帧，并按候选帧到期时间等待；不需要增大缓存才能跳过已过期画面。暂停和显式 seek 时停止淘汰，准备首帧与逐帧播放仍按顺序取帧。主线程在同一队列锁内选择最新到期帧，避免与后台替换竞态。
 
@@ -177,6 +180,8 @@ await capturer.StopRecordingAsync();
 
 所有组件控制 API 在 Unity 主线程调用。编码与封装在一个后台线程执行，GPU 回读和编码共用 1–8 个固定槽位，默认 6 个；容量包含正在回读、排队和正在编码的帧。GPU 回读通常晚 2–3 帧才完成，3 个槽位在 60 FPS 下容易被占满，场景中序列化的 `BufferedFrameLimit` 应不少于 4（推荐 6）。所有槽位被占用时丢弃该次渲染并计入 `BufferOverflowFrames`；游戏渲染慢于 `FrameRate` 而缺少画面的帧率间隔计入 `SourceGapFrames`；`DroppedFrames` 为两者之和，停止时日志输出这两项与槽位峰值。PTS 保留实际单调时钟间隔，不压缩录制时间；不通过重复帧补齐 CFR。
 
+`CaptureClock` 选择时间戳来源。默认 `WallClock` 用录制时钟的真实间隔生成 PTS，适合录制正在实时运行的游戏；渲染快于 `FrameRate` 时丢弃偏离帧时刻的渲染，慢时留下空洞。`RenderFrame` 给每一帧被接受的渲染下一个帧号，一次渲染恰好占一个帧周期，用于 `Time.captureFramerate` 这类「每渲染一帧就推进一个固定步长」的离线渲染：机器的渲染速度不再折算进视频时长，提前到达的渲染不会被丢弃，槽位占满时该次渲染不占用帧号（下一次渲染接续上一个时间戳），因此时间轴不出现空洞。此时 `CapturedFrames` 就是已接受的渲染帧数，调用方可以据此同步混音，让音轨与视频严格等长。离线渲染若按墙钟计时，渲染快慢会直接拉伸或压缩时间轴并与离线混音的音轨错开。
+
 每次渲染按其所在 Unity 帧开始时（capturer 的 `Update`，执行顺序最先）的录制时钟计时，与游戏计算该帧画面所用时刻一致，也排除了渲染前脚本与剔除耗时的抖动；每个 Unity 帧最多采集一次。时间戳不再逐帧独立向下取整：渲染与下一帧时刻相差不超过 0.75 帧时记为下一帧，晚于此才跳帧并对齐到最近的帧，因此渲染与录制帧率相同时，帧边界附近的计时抖动不会再产生“重复帧被丢弃、下一帧又跳过”的成对丢帧，时间戳与时钟偏差不超过 0.75 帧。渲染快于录制帧率时保留最接近各帧时刻的渲染。录制尺寸固定且必须为偶数，支持缩放 Camera 输出。需要异步 GPU 回读支持；捕获是 SDR sRGB RGBA8，转换为 limited-range YUV，矩阵/原色为 BT.709，transfer metadata 为 sRGB，没有 HDR tone mapping。默认（`PreferGpuColorConversion = true`）在 GPU 上完成 RGBA→NV12：缩放 Blit 之后，`Resources/FFmpegCaptureNv12.shader` 把缩放后的 RGBA 转为 `宽 × 高 × 1.5` 的 R8 回读 RT（上方为 Y 平面，下方为交错的 Cb/Cr 行，已是 top-first），回读量从每像素 4 字节降为 1.5 字节；编码线程只把平面复制进 AVFrame（YUV420P 编码器再拆分色度），不创建 CPU 转换线程，`ConverterThreadCount` 为 0、`UsesGpuColorConversion` 为 true。着色器对同样的 8 位 sRGB 码值使用 `VideoPixelKernels` 的定点系数（由 C# 传入）和整数运算，输出与 CPU 转换逐样本相同；行寻址只用 `Load` 与 `SV_Position` 的显存行号，与 AsyncGPUReadback 的行序一致，不依赖图形 API 的翻转约定。设备不支持该着色器（需 shader model 3.5 整数运算）、R8 渲染或 R8 回读，或 NV12 高度超过最大纹理尺寸时，日志说明原因并回退到 CPU 转换；设置 `PreferGpuColorConversion = false` 可直接使用 CPU 路径。CPU 路径的 RGBA→YUV420P/NV12 由 Burst 编译的 `CaptureFrameConverter` 在编码线程完成：直接按 bottom-first 行序读取回读缓冲区（不再先复制到 RGBA staging，也不再经过 libswscale），色度取 2×2 像素均值，灰色精确映射为中性色度；高度每满 32 行可多用一个线程（不超过 `MaximumSoftwareThreads`），按行对分带交给按需创建的后台线程，`ConverterThreadCount` 报告实际线程数。
 
 `FrameRate` 是采样上限和时间戳的时间基准。游戏 120 FPS、录制 30 FPS 时，约每四次 Camera 渲染采一帧；游戏 30 FPS、录制 60 FPS 时，只能获得约 30 个真实画面/秒，相邻 PTS 跨两个目标时间槽，视频保持实际经过时间。低帧率、渲染卡顿或缓冲池满会降低流畅度；CBR/VBR 是编码器采用的控制模式，缺帧和画面复杂度仍可能使实际码率偏离目标，应观察 `CurrentBitRate`。
@@ -185,7 +190,7 @@ await capturer.StopRecordingAsync();
 
 `FFmpegCameraCapturerEditor` 在单选场景组件的 Play Mode Inspector 中提供 Start Recording、Pause/Resume 和 Stop Recording。开始时选择新文件路径，停止时异步等待排空和文件尾写入。面板显示实际编码器、软件/硬件、格式、CBR/VBR、当前/目标/最大码率、软件线程数、尺寸、提交帧数、丢帧、时长、输出路径及错误/回退原因；配置修改在下次录制生效。帧率分别显示下一次配置、当前会话时间基准、成功提交帧率和游戏帧率，后两者使用约 0.5 秒窗口估算；队列追赶时提交速率可能短暂高于目标。当前码率按最近约 1 秒媒体时间计算，暂停保留读数，不表示暂停期间仍持续产生该墙钟吞吐量。多选仅编辑配置，Prefab 资产不提供录制控制。
 
-`Options` 在开始时复制。修改选项、Camera、缓冲容量或 `ReadbackOrientation` 在下次录制应用；当前编码器身份与模式不会随偏好变化。`ReadbackOrientation.Automatic` 按 Unity Blit 捕获纹理的 bottom-first 行序解释；自定义渲染管线输出方向不同时可以明确选择 `TopFirst` / `BottomFirst`。
+`Options` 在开始时复制。修改选项、Camera、缓冲容量、`ReadbackOrientation` 或 `CaptureClock` 在下次录制应用；当前编码器身份与模式不会随偏好变化。`ReadbackOrientation.Automatic` 按 Unity Blit 捕获纹理的 bottom-first 行序解释；自定义渲染管线输出方向不同时可以明确选择 `TopFirst` / `BottomFirst`。
 
 | API | 语义 |
 | --- | --- |
@@ -201,6 +206,7 @@ await capturer.StopRecordingAsync();
 | `CurrentBitRate`, `BytesWritten`, `EncodedFrames` | 最近约 1 秒媒体时间的视频压缩码率、压缩字节数、成功提交帧数；不包含容器开销 |
 | `HardwareFallbackReason`, `DroppedFrames`, `TimeSeconds` | 硬件偏好回退原因、丢帧计数、捕获持续时间（排除初始化、录制暂停和停止排空） |
 | `SourceGapFrames`, `BufferOverflowFrames` | 丢帧的两种原因：游戏渲染慢于录制帧率而缺少画面的帧率间隔；GPU 回读与编码占满全部槽位而丢弃的渲染（稳定渲染时非零说明槽位过少或编码过慢） |
+| `CaptureClock`, `CapturedFrames` | 下次录制的时间戳来源（`WallClock` 实时，`RenderFrame` 定步离线渲染）；当前或最近会话已接受的渲染帧数 |
 | `Started`, `Stopped`, `ErrorReceived` | 主线程事件；Stopped 表示资源关闭，错误状态需同时检查 LastError |
 
 CBR 设置目标码率以及相同的 min/max；VBR 使用独立目标和最大码率。VBV 后端通过约 1 秒缓冲限制，单帧和短时窗口仍会波动；libvpx/libaom 的 CBR 和单遍 VBR 均使用原生码率预算，复杂画面可能超出预算，也不保证低复杂度画面填满目标码率，`MaximumBitRate` 不表示每帧或瞬时负载硬上限。软件线程数限制 FFmpeg codec worker，不包含应用采集线程和驱动的辅助线程。硬件偏好仅回退到**同格式**的软件实现，不会偷偷改换编码格式；不支持请求的模式/码率约束时明确失败。

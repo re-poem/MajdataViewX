@@ -22,6 +22,7 @@ namespace MajdataViewX.Managers
 {
     public class TimeProvider : MonoBehaviour
     {
+        // TODO: 审阅三方时间轴同步怎么个事儿，然后给它测稳了。。对play的ffmpeg应该要提交一个pr，，
         public bool IsStart { get; private set; }
         public bool IsRecord { get; private set; }
 
@@ -35,10 +36,12 @@ namespace MajdataViewX.Managers
         private NativeList<(float time, float sVeloc)> _svList = new(20, Allocator.Persistent);
         private NativeArray<(float k, float b)> _svFuncArgs;
 
-        private double _startRealtime; //the beginning of the program is 0
         private float _startAt; //the beginning of the audio is 0
         private float _offset;
         private float _speed;
+        /// <summary>录制模式每帧固定的游戏时间步长（speed / fps）；captureFramerate 已按帧计时，不再依赖 Time.timeAsDouble。</summary>
+        private double _recordTime;
+        private float _recordStep;
 
         private readonly Stopwatch _playbackClock = new();
 
@@ -93,7 +96,7 @@ namespace MajdataViewX.Managers
             }
 
             if (IsRecord)
-                AudioTime = (float)(_startAt + (Time.timeAsDouble - _startRealtime));
+                AudioTime = (float)(_recordTime += _recordStep);
             else
                 AudioTime = (float)(_startAt + _playbackClock.Elapsed.TotalSeconds * _speed);
 
@@ -174,8 +177,11 @@ namespace MajdataViewX.Managers
                 case PlaybackMode.Record:
                     {
                         IsRecord = true;
-                        _startRealtime = Time.timeAsDouble;
                         this._startAt -= SONG_DETAIL_OFFSET;
+                        // 固定步进：一帧渲染就推进 speed/fps 的游戏时间，和视频帧号严格 1:1，
+                        // 不受真实渲染速度与 timeScale 组合语义影响。
+                        _recordStep = Mathf.Max(speed, 0.01f) / Mathf.Max(1, fps);
+                        _recordTime = this._startAt - _recordStep;
                         Time.timeScale = speed;
                         Time.captureFramerate = fps;
                     }
@@ -194,10 +200,11 @@ namespace MajdataViewX.Managers
             IsRecord = false;
             AudioTime = 0f;
             NoteTime = 0f;
-            _startRealtime = 0f;
             _startAt = 0f;
             _offset = 0f;
             _speed = 1f;
+            _recordStep = 0f;
+            _recordTime = 0;
             _playbackClock.Reset();
             Time.timeScale = 1f;
             Time.captureFramerate = 0;

@@ -27,6 +27,8 @@ namespace MajdataViewX.Managers
         private const string TempVideoName = "out.video.mp4";
         /// <summary>目标码率下限，避免小窗口导出码率过低。</summary>
         private const long MinimumBitRate = 1_000_000;
+        /// <summary>离线导出没有实时约束，取满 <see cref="FFmpegCameraCapturer.BufferedFrameLimit"/> 允许的缓冲数以吸收编码抖动。</summary>
+        private const int MaximumBufferedFrames = 8;
 
         private FFmpegCameraCapturer _capturer;
         /// <summary>保留场景里配置的编码器偏好，只覆盖尺寸、帧率与码率。</summary>
@@ -50,6 +52,11 @@ namespace MajdataViewX.Managers
 
             // Options 每次录制都会被替换成新对象，这里持有的是场景序列化的那份配置。
             _baseOptions = _capturer.Options;
+
+            // 导出走的是 Time.captureFramerate 的离线定步渲染：引擎每渲染一帧就推进恰好 1/fps，
+            // 所以帧号必须按“渲染帧计数”给，缓冲也没有实时压力，直接拉满以减少丢帧。
+            _capturer.CaptureClock = CameraCaptureClock.RenderFrame;
+            _capturer.BufferedFrameLimit = MaximumBufferedFrames;
         }
 
         public async UniTask StartRecording(string maidataPath,
@@ -102,6 +109,7 @@ namespace MajdataViewX.Managers
 
             var frameDuration = 1.0 / fps;
             var recordingElapsedTime = 0.0;
+            var mixedFrames = 0L;
             var audioStarted = false;
             var capturerStopped = false;
             var outputSucceeded = false;
@@ -114,6 +122,20 @@ namespace MajdataViewX.Managers
                 onStart?.Invoke();
                 _audioManager.BeginRecordingAudio(_timeProvider.AudioTime, _timeProvider.CurrentSpeed);
                 audioStarted = true;
+            }
+
+            // 音轨帧与视频帧共用同一个帧号：capturer 每收下一帧渲染就递增一次计数，
+            // 这里按它的计数补混音频，缓冲满丢帧时音轨同步少混一帧，导出后两者严格等长。
+            void MixCapturedFrames()
+            {
+                var capturedFrames = _capturer.CapturedFrames;
+                while (mixedFrames < capturedFrames)
+                {
+                    var frameEndTime = recordingElapsedTime + frameDuration;
+                    _audioManager.UpdateRecordingAudioFrame(recordingElapsedTime, frameEndTime);
+                    recordingElapsedTime = frameEndTime;
+                    mixedFrames++;
+                }
             }
 
             IsRecording = true;
@@ -137,14 +159,14 @@ namespace MajdataViewX.Managers
                         continue;
                     }
 
-                    var frameEndTime = recordingElapsedTime + frameDuration;
-                    _audioManager.UpdateRecordingAudioFrame(recordingElapsedTime, frameEndTime);
-                    recordingElapsedTime = frameEndTime;
+                    MixCapturedFrames();
                 }
 
                 IsRecording = false;
-                _audioManager.EndRecordingAudio((float)recordingElapsedTime);
+                // 先停采把帧数定死，再补齐最后一帧的音频，避免停采与收尾之间多出的帧只进了视频。
                 await _capturer.StopRecordingAsync();
+                MixCapturedFrames();
+                _audioManager.EndRecordingAudio((float)recordingElapsedTime);
                 capturerStopped = true;
                 outputSucceeded = await MuxRecordingAudio(tempVideoPath, finalPath);
             }

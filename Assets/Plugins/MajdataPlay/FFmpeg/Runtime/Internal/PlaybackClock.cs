@@ -8,8 +8,10 @@ namespace MajdataPlay.FFmpeg.Internal
     /// <summary>Tracks a monotonic, rate-adjustable media timeline independently of Unity's time scale.</summary>
     internal sealed class PlaybackClock
     {
-        /// <summary>Provides monotonic time in seconds, independently of Unity's time scale.</summary>
-        private readonly Func<double> _now;
+        /// <summary>Provides wall-clock seconds for the default timeline.</summary>
+        private static readonly Func<double> WallClock = () => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
+        /// <summary>Provides monotonic time in seconds; replaceable so offline rendering can supply game time.</summary>
+        private Func<double> _now;
         /// <summary>Store the wall-clock anchor, anchored media position in seconds, and playback multiplier.</summary>
         private double _anchor, _position, _rate = 1;
         /// <summary>Gets whether the media clock is advancing.</summary>
@@ -19,7 +21,17 @@ namespace MajdataPlay.FFmpeg.Internal
         /// <param name="now">An optional monotonic time provider returning seconds; null uses Stopwatch.</param>
         public PlaybackClock(Func<double>? now = null)
         {
-            _now = now ?? (() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency);
+            _now = now ?? WallClock;
+        }
+
+        /// <summary>Replaces the time source and re-anchors at the current position; null restores the wall clock.</summary>
+        /// <param name="now">A monotonic time provider returning seconds, or null.</param>
+        public void SetClockSource(Func<double>? now)
+        {
+            var position = Position;
+            _now = now ?? WallClock;
+            _position = position;
+            _anchor = _now();
         }
 
         /// <summary>Gets the current media position in seconds.</summary>

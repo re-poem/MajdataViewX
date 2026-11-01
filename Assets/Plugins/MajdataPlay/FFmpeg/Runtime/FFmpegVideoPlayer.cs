@@ -124,6 +124,8 @@ namespace MajdataPlay.FFmpeg
         private double _seekTarget, _lastFrameEnd;
         /// <summary>Track the presentation counter, last reported millisecond position, and control revision used to reject stale callbacks.</summary>
         private long _frameNumber, _lastReportedTime = -1, _controlRevision;
+        /// <summary>Stores the caller-supplied media clock in seconds, or null for the wall clock.</summary>
+        private Func<double>? _mediaClock;
         /// <summary>Stores the monotonic Stopwatch timestamp of the last frame presented during playback.</summary>
         private long _lastPlaybackPresentTimestamp;
         /// <summary>Identifies the Unity thread allowed to control this player.</summary>
@@ -262,6 +264,24 @@ namespace MajdataPlay.FFmpeg
         }
 
 
+        /// <summary>Gets or sets the monotonic clock that drives the media timeline, or null for the wall clock.</summary>
+        /// <remarks>时钟的推进节奏决定播放节奏。离线定步渲染传入游戏时间后，解码帧按游戏时间到期，视频自然与同一帧的音轨和录像同步；默认墙钟用于实时播放。</remarks>
+        public Func<double>? MediaClock
+        {
+            get => _mediaClock;
+            set
+            {
+                if (ReferenceEquals(_mediaClock, value))
+                {
+                    return;
+                }
+
+                CheckThread();
+                _mediaClock = value;
+                _session?.SetClockSource(value);
+            }
+        }
+
         /// <summary>Gets or sets the preferred decoder backend for the next media open.</summary>
         /// <remarks>Hardware preference permits CPU upload or software fallback unless <see cref="RequireHardwareDecoding"/> is enabled.</remarks>
         /// <exception cref="ArgumentOutOfRangeException">The value is not a defined decoder type.</exception>
@@ -384,6 +404,7 @@ namespace MajdataPlay.FFmpeg
                 var source = NormalizeSource(_source);
                 InitializeContentInput(source);
                 _session = new VideoDecodeSession(source, options, BufferedFrameLimit, _playbackRate);
+                _session.SetClockSource(_mediaClock);
             }
             catch (Exception error)
             {
@@ -871,6 +892,13 @@ namespace MajdataPlay.FFmpeg
         /// </remarks>
         private bool IsPresentationThrottled()
         {
+            // 外部时钟的推进节奏由调用方决定，没有到期帧时本来就不会上传；
+            // 用墙钟限速只会把已经到期的帧推到下一个渲染帧。
+            if (_mediaClock != null)
+            {
+                return false;
+            }
+
             var frameRate = _info?.FrameRate ?? 0;
             var nominalFrameRate = double.IsNaN(frameRate) || frameRate <= 0 ? 60 : Math.Max(24, Math.Min(120, frameRate));
             var elapsed = (Stopwatch.GetTimestamp() - _lastPlaybackPresentTimestamp) / (double)Stopwatch.Frequency;
@@ -1101,6 +1129,7 @@ namespace MajdataPlay.FFmpeg
                 var source = NormalizeSource(_source);
                 InitializeContentInput(source);
                 _session = new VideoDecodeSession(source, options, BufferedFrameLimit, _playbackRate);
+                _session.SetClockSource(_mediaClock);
                 if (_prepared && _info != null && _info.CanSeek)
                 {
                     _seekTarget = position;

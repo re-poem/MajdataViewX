@@ -32,6 +32,24 @@ namespace MajdataPlay.FFmpeg
         Paused
     }
 
+    /// <summary>Specifies which clock assigns the frame timestamp of a captured render.</summary>
+    public enum CameraCaptureClock
+    {
+        /// <summary>Timestamps renders with the recording stopwatch so that video follows real elapsed time.</summary>
+        /// <remarks>
+        /// Renders that arrive too early or too late for the next frame period are skipped or leave a timestamp gap.
+        /// Use this for interactive recording of a running application.
+        /// </remarks>
+        WallClock,
+        /// <summary>Timestamps every accepted render with the next frame number, producing one frame period per render.</summary>
+        /// <remarks>
+        /// Use this for offline rendering that advances the application by a fixed step per rendered frame, such as
+        /// <c>Time.captureFramerate</c>. Recording pace becomes irrelevant and no render is skipped for arriving early;
+        /// a render that finds every capture buffer busy reuses the next free timestamp instead of leaving a gap.
+        /// </remarks>
+        RenderFrame
+    }
+
     /// <summary>Specifies the native row order of GPU readback pixels.</summary>
     public enum CameraReadbackOrientation
     {
@@ -46,6 +64,9 @@ namespace MajdataPlay.FFmpeg
     /// <summary>Records a Camera through bounded GPU readbacks and a background FFmpeg encoder.</summary>
     /// <remarks>
     /// Call component APIs on the Unity main thread. Events are raised on that thread.
+    /// Recording follows real elapsed time by default; offline rendering that advances the application by one fixed step per
+    /// rendered frame selects <see cref="CameraCaptureClock.RenderFrame"/> instead and keeps its audio in step through
+    /// <see cref="CapturedFrames"/>.
     /// MRP display output uses MajCameraCaptureBridge; other SRPs use CameraCaptureBridge.
     /// Explicit targets are copied after end-context rendering.
     /// Built-in uses the camera's post-render callback. Custom pipelines must execute bridge actions or
@@ -76,6 +97,9 @@ namespace MajdataPlay.FFmpeg
         [SerializeField]
         [FormerlySerializedAs("ReadbackOrientation")]
         private CameraReadbackOrientation _readbackOrientation;
+        /// <summary>Selects the clock that timestamps renders for the next recording.</summary>
+        [SerializeField]
+        private CameraCaptureClock _captureClock;
         /// <summary>Requests RGBA to NV12 conversion on the GPU before readback when the device supports it.</summary>
         [SerializeField]
         [FormerlySerializedAs("PreferGpuColorConversion")]
@@ -98,6 +122,10 @@ namespace MajdataPlay.FFmpeg
         private int _mainThread;
         /// <summary>Assigns strictly increasing frame timestamps to renders and counts frame periods without a render.</summary>
         private readonly CaptureFrameTimeline _timeline = new CaptureFrameTimeline();
+        /// <summary>Stores the timestamp that the next accepted render receives from the render-frame clock.</summary>
+        private long _nextFrameIndex;
+        /// <summary>Counts the rendered frames the active or last recording accepted for encoding.</summary>
+        private long _capturedFrames;
         /// <summary>Stores the recording clock in seconds when <see cref="Update"/> began the current Unity frame.</summary>
         private double _frameStartSeconds;
         /// <summary>Stores the Unity frame in which <see cref="_frameStartSeconds"/> was sampled, or -1 before any.</summary>
@@ -150,6 +178,14 @@ namespace MajdataPlay.FFmpeg
         }
         /// <summary>Gets or sets the readback row interpretation used for the next recording.</summary>
         public CameraReadbackOrientation ReadbackOrientation { get => _readbackOrientation; set => _readbackOrientation = value; }
+        /// <summary>Gets or sets the clock that timestamps frames for the next recording.</summary>
+        /// <remarks>
+        /// <see cref="CameraCaptureClock.WallClock"/> keeps video on real elapsed time for interactive recording.
+        /// <see cref="CameraCaptureClock.RenderFrame"/> gives every accepted render the next frame number, which is what
+        /// offline rendering driven by one fixed step per rendered frame requires; see <see cref="CapturedFrames"/>.
+        /// Changing the clock never affects an active recording.
+        /// </remarks>
+        public CameraCaptureClock CaptureClock { get => _captureClock; set => _captureClock = value; }
         /// <summary>Gets or sets whether the next recording converts RGBA to NV12 on the GPU before readback when the device supports it.</summary>
         /// <remarks>
         /// GPU conversion reads back 1.5 instead of 4 bytes per pixel and needs no CPU converter threads, with samples equal
@@ -197,6 +233,13 @@ namespace MajdataPlay.FFmpeg
         public long BitRate => _activeOptions?.BitRate ?? 0;
         /// <summary>Gets the number of submitted video frames.</summary>
         public long EncodedFrames => _session?.EncodedFrames ?? 0;
+        /// <summary>Gets the number of rendered frames the active or last recording accepted for encoding.</summary>
+        /// <remarks>
+        /// Counts a render when it takes a capture buffer, before its GPU readback and encoding finish, so it is the frame
+        /// number of the last accepted capture plus one. Under <see cref="CameraCaptureClock.RenderFrame"/> it equals the
+        /// recorded frame count, which lets an offline renderer mix exactly as many audio frames as the video contains.
+        /// </remarks>
+        public long CapturedFrames => _capturedFrames;
         /// <summary>Gets total compressed-video bytes, excluding container overhead.</summary>
         public long BytesWritten => _session?.BytesWritten ?? 0;
         /// <summary>Gets the active software codec worker count, or zero for hardware or before initialization.</summary>
@@ -277,6 +320,11 @@ namespace MajdataPlay.FFmpeg
                 throw new ArgumentOutOfRangeException(nameof(ReadbackOrientation));
             }
 
+            if (!Enum.IsDefined(typeof(CameraCaptureClock), _captureClock))
+            {
+                throw new ArgumentOutOfRangeException(nameof(CaptureClock));
+            }
+
             Unhook();
             _resources?.Close();
             if (_resources != null && !_resources.Released.IsCompleted)
@@ -292,6 +340,8 @@ namespace MajdataPlay.FFmpeg
             _timeline.Reset();
             _lastCaptureFrame = -1;
             _bufferOverflowFrames = 0;
+            _nextFrameIndex = 0;
+            _capturedFrames = 0;
             _completionReported = false;
             _clock.Reset();
             State = CameraCaptureState.Preparing;
@@ -607,26 +657,45 @@ namespace MajdataPlay.FFmpeg
             }
 
             _lastCaptureFrame = unityFrame;
-            // The render shows the state computed at the start of its frame; timing it there also excludes the varying
-            // script and culling time before rendering, which would otherwise jitter the timestamps. A sample taken before
-            // this recording's clock was reset is newer than the clock and is ignored.
-            var seconds = _clock.Elapsed.TotalSeconds;
-            if (_frameStartFrame == unityFrame && _frameStartSeconds <= seconds)
+            long frameIndex;
+            if (_captureClock == CameraCaptureClock.RenderFrame)
             {
-                seconds = _frameStartSeconds;
+                // Offline rendering advances by exactly one frame period per rendered frame, whatever the wall clock does;
+                // deriving the timestamp from the stopwatch would rescale the timeline to the machine's render speed.
+                frameIndex = _nextFrameIndex;
             }
-            if (!_timeline.TryAssign(seconds * _activeOptions.FrameRate, out var frameIndex))
+            else
             {
-                return;
+                // The render shows the state computed at the start of its frame; timing it there also excludes the varying
+                // script and culling time before rendering, which would otherwise jitter the timestamps. A sample taken before
+                // this recording's clock was reset is newer than the clock and is ignored.
+                var seconds = _clock.Elapsed.TotalSeconds;
+                if (_frameStartFrame == unityFrame && _frameStartSeconds <= seconds)
+                {
+                    seconds = _frameStartSeconds;
+                }
+                if (!_timeline.TryAssign(seconds * _activeOptions.FrameRate, out frameIndex))
+                {
+                    return;
+                }
             }
 
             var flip = _resources.FlipVertically;
             var frame = _session.TryReserve(frameIndex, flip);
             if (frame == null)
             {
+                // The render has no buffer. Under the render-frame clock the timestamp stays unused, so the following render
+                // continues the sequence instead of leaving a hole that would stretch the video away from its audio.
                 _bufferOverflowFrames++;
                 return;
             }
+
+            if (_captureClock == CameraCaptureClock.RenderFrame)
+            {
+                _nextFrameIndex++;
+            }
+
+            _capturedFrames++;
 
             var viewport = GraphicsSettings.currentRenderPipeline == null && _activeCamera != null && _activeCamera.targetTexture == null
                 ? _activeCamera.rect : new Rect(0, 0, 1, 1);

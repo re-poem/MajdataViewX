@@ -243,6 +243,17 @@ namespace MajdataPlay.FFmpeg.Internal
             }
         }
 
+        /// <summary>Replaces the clock that drives the media timeline, keeping the current position; null returns to the wall clock.</summary>
+        /// <param name="now">A monotonic time provider in seconds, or null.</param>
+        public void SetClockSource(Func<double>? now)
+        {
+            lock (_gate)
+            {
+                _playbackClock.SetClockSource(now);
+                Monitor.PulseAll(_gate);
+            }
+        }
+
         /// <summary>Transfers ownership of the next queued frame to the caller and wakes the worker.</summary>
         /// <returns>The next owned frame, or null if the queue is empty; the caller must dispose the frame.</returns>
         public DecodedVideoFrame? TakeFrame()
