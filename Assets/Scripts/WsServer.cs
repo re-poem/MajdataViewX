@@ -253,15 +253,6 @@ namespace MajdataViewX
 
         private async UniTask HandlePauseAsync()
         {
-            // 录制中不接受暂停：沿用旧行为，但新协议要求每个请求都有应答，
-            // 否则客户端的在途计数永远不归零、状态会一直卡在 Busy。
-            if (_screenRecorder.IsRecording)
-            {
-                _wsServer.Error("pause rejected: recording in progress");
-                Reply(new PauseResponse { accepted = false }.ToBytes());
-                return;
-            }
-
             var paused = await _playManager.PauseAsync();
             // 协议没有 Stop：编辑器用 Pause 表达「停下」。播放器已经不在播放时视为已达成，
             // 只有真正失败（进 Error）才回 accepted = false。

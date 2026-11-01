@@ -7893,6 +7893,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1463030766}
   - component: {fileID: 1463030765}
+  - component: {fileID: 1463030767}
   m_Layer: 0
   m_Name: ScreenRecorder
   m_TagString: Untagged
@@ -7927,6 +7928,32 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1463030767
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1463030764}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f01698c5e0e946d5843ff160ac9768e3, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: MajdataPlay.FFmpeg::MajdataPlay.FFmpeg.FFmpegCameraCapturer
+  _targetCamera: {fileID: 519420031}
+  _options:
+    <Width>k__BackingField: 1920
+    <Height>k__BackingField: 1080
+    <FrameRate>k__BackingField: 60
+    <PreferredEncoderType>k__BackingField: 1
+    <MaximumSoftwareThreads>k__BackingField: 8
+    <Format>k__BackingField: 0
+    <BitRate>k__BackingField: 8000000
+    <MaximumBitRate>k__BackingField: 16000000
+    <RateControlMode>k__BackingField: 1
+  _bufferedFrameLimit: 6
+  _readbackOrientation: 0
+  _preferGpuColorConversion: 1
 --- !u!1 &1496337396
 GameObject:
   m_ObjectHideFlags: 0

@@ -88,6 +88,10 @@ namespace MajdataViewX.Managers
         {
             while (State is ViewStatus.Busy)
                 await UniTask.Yield();
+
+            if (State is ViewStatus.Playing)
+                await PauseAsync();
+            
             State = ViewStatus.Busy;
 
             try

@@ -93,7 +93,7 @@ namespace MajdataViewX.Managers
         {
             _audioManager = this;
             SfxRequestsPtr = (bool*)noteSfxPlaybackRequests.GetUnsafePtr();
-            Bass.Init(-1, SAMPLE_RATE);
+            MajEnv.InitBass(SAMPLE_RATE);
 
             //Note SFX
             var sfxPath = MajEnv.GetPath("SFX");
