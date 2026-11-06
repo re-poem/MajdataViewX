@@ -81,7 +81,7 @@ namespace MajdataViewX.Managers
         }
 
         private bool CheckIsLoaded() => _audioManager.IsTrackLoaded &&
-                                        _bgManager.IsBgLoaded &&
+                                        _bgManager.IsCoverLoaded &&
                                         _bgManager.IsVideoLoaded;
 
         public async UniTask<bool> LoadAsync(string audioPath, string bgPath, string? pvPath)
@@ -104,23 +104,23 @@ namespace MajdataViewX.Managers
                 //bg
                 if (File.Exists(bgPath))
                 {
-                    BgManager.HasBg = true;
-                    _bgManager.LoadBg(bgPath);
+                    _bgManager.HasCover = true;
+                    _bgManager.LoadCover(bgPath);
                 }
                 else
                 {
-                    BgManager.HasBg = false;
+                    _bgManager.HasCover = false;
                 }
 
                 //video
                 if (pvPath is not null && File.Exists(pvPath))
                 {
-                    BgManager.HasVideo = true;
+                    _bgManager.HasVideo = true;
                     _bgManager.LoadVideo(pvPath);
                 }
                 else
                 {
-                    BgManager.HasVideo = false;
+                    _bgManager.HasVideo = false;
                 }
 
                 State = ViewStatus.Loaded;
@@ -156,7 +156,7 @@ namespace MajdataViewX.Managers
             //bg
             _bgCover.color = new Color(0f, 0f, 0f, _setting.BackgroundDim);
             _bgOutsideCover.color = new Color(0f, 0f, 0f, _setting.BackgroundOutsideDim);
-            _bgManager.resizeBg = _setting.ResizeBg;
+            _bgManager.FullScreenBg = _setting.ResizeBg;
         }
 
         public async UniTask<bool> ParseAsync(
@@ -189,6 +189,7 @@ namespace MajdataViewX.Managers
             //answer
             // TODO: MajProtocol 2.0 的 SimaiRequest 没有 clock_count 字段，这里先固定为 4，
             // 之后改为从 Simai 内容的 &clock_count 指令解析。
+            _audioManager.NoteOffset = offset;
             _audioManager.GenerateAnswerSFX(chart, 4);
 
             //counter
@@ -219,8 +220,7 @@ namespace MajdataViewX.Managers
                 var ignoreOffset = startAt - _currentOffset;
 
                 //bg
-                _bgManager.ShowBg();
-                _bgManager.ShowVideo();
+                _bgManager.Show();
                 //sfx
                 _audioManager.ResetAnswerSFX(ignoreOffset);
                 //counter

@@ -26,7 +26,7 @@ namespace MajdataViewX.Managers
         /// <summary>仅含视频的中间文件名，封装成功后删除。</summary>
         private const string TempVideoName = "out.video.mp4";
         /// <summary>目标码率下限，避免小窗口导出码率过低。</summary>
-        private const long MinimumBitRate = 1_000_000;
+        private const long MinimumBitRate = 400_000;
         /// <summary>离线导出没有实时约束，取满 <see cref="FFmpegCameraCapturer.BufferedFrameLimit"/> 允许的缓冲数以吸收编码抖动。</summary>
         private const int MaximumBufferedFrames = 8;
 
@@ -290,13 +290,14 @@ namespace MajdataViewX.Managers
         {
             var bitsPerPixel = quality switch
             {
-                ExportQuality.Low => 0.06,
-                ExportQuality.Medium => 0.10,
-                ExportQuality.High => 0.16,
-                ExportQuality.Ultra => 0.24,
-                _ => 0.16
+                ExportQuality.Low => 0.02,
+                ExportQuality.Medium => 0.04,
+                ExportQuality.High => 0.07,
+                ExportQuality.Ultra => 0.12,
+                _ => 0.07
             };
-            // 目标码率按每像素每帧位数换算并取整到 kBit/s；VBR 上限留一倍余量给复杂画面。
+            // 目标码率按每像素每帧位数换算并取整到 kBit/s。
+            // VBR 的下限（rc_min_rate）在编码器里已经是 0，压体积只能压目标与峰值；峰值只留半倍余量。
             var bitRate = Math.Max(
                 (long)(width * (double)height * fps * bitsPerPixel / 1000) * 1000,
                 MinimumBitRate);
@@ -309,7 +310,7 @@ namespace MajdataViewX.Managers
                 Format = _baseOptions.Format,
                 MaximumSoftwareThreads = Math.Min(Environment.ProcessorCount, 8),
                 BitRate = bitRate,
-                MaximumBitRate = bitRate * 2,
+                MaximumBitRate = bitRate * 3 / 2,
                 RateControlMode = VideoRateControlMode.VBR
             };
         }

@@ -57,6 +57,10 @@ namespace MajdataViewX.Managers
         /// 只用于调整音频的延迟，视频/note/时间轴显示均不变化
         /// </summary>
         public double GlobalAudioOffset { get; private set; }
+        /// <summary>
+        /// Note的起始时间
+        /// </summary>
+        public double NoteOffset { get; set; }
 
         public const int SAMPLE_RATE = 44100;
         public const int CHANNELS = 2;
@@ -202,7 +206,7 @@ namespace MajdataViewX.Managers
         {
             if (!_isInitialized || _timeProvider.IsRecord) return;
 
-            // 预览时不要有声音
+            // 拖动预览时不要有声音
             if (_timeProvider.IsStart)
                 UpdateAnswerSfx();
 
@@ -672,9 +676,8 @@ namespace MajdataViewX.Managers
                     _recordingBuffer[i] = Math.Clamp(mixed, -1.0f, 1.0f);
                 }
             }
-
-            var trackOffset = TRACK_ANSWER_PLAYBACK_OFFSET_SEC;
-            var initialTrackSec = _recordingInitialAudioTime - trackOffset;
+            
+            var initialTrackSec = _recordingInitialAudioTime - TRACK_ANSWER_PLAYBACK_OFFSET_SEC;
 
             // sample-accurate answers
             var answerData = _noteSfxSamplesData[ANSWER];
@@ -684,6 +687,10 @@ namespace MajdataViewX.Managers
 
             foreach (var timing in _answerTimingPoints)
             {
+                // 播放song detail时不要有answer音
+                if (timing.Timing + NoteOffset < initialTrackSec + TimeProvider.SONG_DETAIL_OFFSET)
+                    continue;
+                
                 // Mirror the real-time trigger at Update():
                 // NoteTime > timing + TRACK_ANSWER_PLAYBACK_OFFSET_SEC.
                 var triggerNoteTime = timing.Timing + TRACK_ANSWER_PLAYBACK_OFFSET_SEC;
