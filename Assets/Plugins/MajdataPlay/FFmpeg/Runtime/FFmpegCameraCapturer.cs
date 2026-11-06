@@ -67,7 +67,9 @@ namespace MajdataPlay.FFmpeg
     /// Recording follows real elapsed time by default; offline rendering that advances the application by one fixed step per
     /// rendered frame selects <see cref="CameraCaptureClock.RenderFrame"/> instead and keeps its audio in step through
     /// <see cref="CapturedFrames"/>.
-    /// MRP display output uses MajCameraCaptureBridge; other SRPs use CameraCaptureBridge.
+    /// SRP display output is registered through the <see cref="AddCaptureAction"/> and <see cref="RemoveCaptureAction"/>
+    /// delegates; the defaults use Core RP's CameraCaptureBridge and a pipeline with engine-only capture actions assigns its
+    /// own pair.
     /// Explicit targets are copied after end-context rendering.
     /// Built-in uses the camera's post-render callback. Custom pipelines must execute bridge actions or
     /// raise end-camera and end-context callbacks for explicit targets. Recording includes camera output,
@@ -136,18 +138,10 @@ namespace MajdataPlay.FFmpeg
         private long _bufferOverflowFrames;
         /// <summary>Tracks whether render callbacks are attached.</summary>
         private bool _hooked;
-        /// <summary>Tracks the single bridge supplying the current SRP display output.</summary>
-        private CaptureBridgeRoute _captureBridge;
-        /// <summary>Identifies the provider of a renderer-owned display color target.</summary>
-        private enum CaptureBridgeRoute
-        {
-            /// <summary>No display callback is registered.</summary>
-            None,
-            /// <summary>The active SRP executes Core RP capture actions.</summary>
-            Core,
-            /// <summary>The active MRP executes its engine-only capture actions.</summary>
-            Maj
-        }
+        /// <summary>Registers the capture action with the bridge currently in use, or null while no bridge is used.</summary>
+        private Action<Camera, Action<RenderTargetIdentifier, CommandBuffer>>? _registeredAddCaptureAction;
+        /// <summary>Unregisters the capture action from the bridge currently in use, or null while no bridge is used.</summary>
+        private Action<Camera, Action<RenderTargetIdentifier, CommandBuffer>>? _registeredRemoveCaptureAction;
         /// <summary>Prevents duplicate completion events for the same session.</summary>
         private bool _completionReported;
         /// <summary>Occurs after FFmpeg opens the output and camera capture begins.</summary>
@@ -193,6 +187,17 @@ namespace MajdataPlay.FFmpeg
         /// recording converts on the CPU; see <see cref="UsesGpuColorConversion"/>.
         /// </remarks>
         public bool PreferGpuColorConversion { get => _preferGpuColorConversion; set => _preferGpuColorConversion = value; }
+        /// <summary>Gets or sets the delegate that registers the capture action with the bridge supplying display output.</summary>
+        /// <remarks>
+        /// Defaults to Core RP's CameraCaptureBridge, which URP and other Core RP based pipelines execute. A pipeline that owns
+        /// its display output assigns its own engine-only equivalent here and the matching <see cref="RemoveCaptureAction"/>.
+        /// Set both to null to capture explicit targets only. A changed pair is applied the next time the bridge is selected,
+        /// which is at the latest the next render of the active camera.
+        /// </remarks>
+        public Action<Camera, Action<RenderTargetIdentifier, CommandBuffer>>? AddCaptureAction { get; set; } = CameraCaptureBridge.AddCaptureAction;
+        /// <summary>Gets or sets the delegate that unregisters the capture action added through <see cref="AddCaptureAction"/>.</summary>
+        /// <remarks>Must belong to the same bridge as <see cref="AddCaptureAction"/>; a null value leaves the action registered.</remarks>
+        public Action<Camera, Action<RenderTargetIdentifier, CommandBuffer>>? RemoveCaptureAction { get; set; } = CameraCaptureBridge.RemoveCaptureAction;
         /// <summary>Gets whether the active or last recording converts RGBA to NV12 on the GPU, or false before recording starts.</summary>
         public bool UsesGpuColorConversion => _session?.PixelLayout == CapturePixelLayout.Nv12;
         /// <summary>Gets the current recording state.</summary>
@@ -570,7 +575,7 @@ namespace MajdataPlay.FFmpeg
         private void OnEndCameraRendering(ScriptableRenderContext context, Camera camera)
         {
             if (!IsRecording || camera != _activeCamera || camera.targetTexture == null || _resources == null
-                || _captureBridge != CaptureBridgeRoute.None)
+                || _registeredAddCaptureAction != null)
             {
                 return;
             }
@@ -596,20 +601,27 @@ namespace MajdataPlay.FFmpeg
             Graphics.ExecuteCommandBuffer(commands);
         }
 
-        /// <summary>Routes display capture to exactly one bridge as the pipeline or destination changes.</summary>
+        /// <summary>Routes display capture through exactly one bridge as the pipeline or destination changes.</summary>
+        /// <remarks>
+        /// The configured <see cref="AddCaptureAction"/> pair identifies the bridge, so a route change unregisters through the
+        /// remove delegate that registered and registers the action on the bridge now configured.
+        /// </remarks>
         /// <param name="enabled">Whether the camera needs the renderer-provided display color target.</param>
         private void SetCaptureBridge(bool enabled)
         {
             var camera = _activeCamera;
             var action = _captureAction;
-            var route = CaptureBridgeRoute.None;
-            if (enabled && camera != null && action != null)
+            var add = enabled && GraphicsSettings.currentRenderPipeline != null ? AddCaptureAction : null;
+            var remove = add != null ? RemoveCaptureAction : null;
+
+            // A half-configured pair, a destroyed camera, or a missing action leaves nothing to register, so no bridge is used.
+            if (add == null || remove == null || camera == null || action == null)
             {
-                var pipeline = GraphicsSettings.currentRenderPipeline;
-                route = pipeline != null ? CaptureBridgeRoute.Core : CaptureBridgeRoute.None;
+                add = null;
+                remove = null;
             }
 
-            if (_captureBridge == route)
+            if (_registeredAddCaptureAction == add)
             {
                 return;
             }
@@ -618,24 +630,17 @@ namespace MajdataPlay.FFmpeg
             // Core RP's own null guard remains responsible for its existing destroyed-camera behavior.
             if (!ReferenceEquals(camera, null) && action != null)
             {
-                if (_captureBridge == CaptureBridgeRoute.Core)
-                {
-                    CameraCaptureBridge.RemoveCaptureAction(camera, action);
-                }
+                _registeredRemoveCaptureAction?.Invoke(camera, action);
             }
 
-            _captureBridge = CaptureBridgeRoute.None;
-            if (camera == null || action == null)
+            _registeredAddCaptureAction = add;
+            _registeredRemoveCaptureAction = remove;
+            if (add == null)
             {
                 return;
             }
 
-            if (route == CaptureBridgeRoute.Core)
-            {
-                CameraCaptureBridge.AddCaptureAction(camera, action);
-            }
-
-            _captureBridge = route;
+            add(camera!, action!);
         }
 
         /// <summary>Records a scaled RGBA copy and asynchronous readback into the renderer's command stream.</summary>
@@ -716,7 +721,6 @@ namespace MajdataPlay.FFmpeg
             RenderPipelineManager.endContextRendering -= OnEndContextRendering;
             _pendingSrpTexture = null;
             SetCaptureBridge(false);
-            _captureBridge = CaptureBridgeRoute.None;
             _hooked = false;
         }
 
