@@ -161,15 +161,15 @@ namespace MajdataViewX.Managers
             {
                 case PlaybackMode.Normal:
                     {
-                        this._speed = speed;
+                        _speed = speed;
                         Time.captureFramerate = 0;
                         _playbackClock.Restart();
                     }
                     break;
                 case PlaybackMode.IncludeOp:
                     {
-                        this._startAt -= SONG_DETAIL_OFFSET;
-                        this._speed = speed;
+                        _startAt -= SONG_DETAIL_OFFSET;
+                        _speed = speed;
                         Time.captureFramerate = 0;
                         _playbackClock.Restart();
                     }
@@ -177,11 +177,11 @@ namespace MajdataViewX.Managers
                 case PlaybackMode.Record:
                     {
                         IsRecord = true;
-                        this._startAt -= SONG_DETAIL_OFFSET;
+                        _startAt -= SONG_DETAIL_OFFSET;
                         // 固定步进：一帧渲染就推进 speed/fps 的游戏时间，和视频帧号严格 1:1，
                         // 不受真实渲染速度与 timeScale 组合语义影响。
                         _recordStep = Mathf.Max(speed, 0.01f) / Mathf.Max(1, fps);
-                        _recordTime = this._startAt - _recordStep;
+                        _recordTime = _startAt - _recordStep;
                         Time.timeScale = speed;
                         Time.captureFramerate = fps;
                     }

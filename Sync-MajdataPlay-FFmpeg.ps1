@@ -1,5 +1,5 @@
 ﻿$RepoRoot = $PSScriptRoot
-$SourceUrl = "https://github.com/TeamMajdata/MajdataPlay.git"
+$SourceUrl = "https://github.com/re-poem/MajdataPlay.git"
 $SourceBranch = "dev"
 $Prefix = "Assets/Plugins/MajdataPlay/FFmpeg"
 
