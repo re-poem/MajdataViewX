@@ -364,10 +364,8 @@ namespace MajdataViewX.Managers
 
         public void ResetState()
         {
-            // Keep the prepared media for the next song instead of closing it; ShowCover invalidates the version.
-            // 素材在 LoadVideo 阶段已保证可 seek（不可 seek 会在那里失败并回落封面）。
-            _videoPlayer.Pause();
-            _videoPlayer.TimeSeconds = 0;
+            if (_videoPlayer.IsPlaying)
+                _videoPlayer.Pause();
 
             ShowCover();
             SetBackgroundMaterial(circledBgMaterial);
