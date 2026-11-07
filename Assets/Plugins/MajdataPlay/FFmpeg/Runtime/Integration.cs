@@ -4,13 +4,21 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Cysharp.Text;
 using Unity.Profiling;
-using UnityEditor.PackageManager;
 using UnityEngine;
 using UnityEngine.Profiling;
 
 // ReSharper disable once CheckNamespace
 namespace MajdataPlay.Diagnostics
 {
+    public enum LogLevel
+    {
+        Trace,
+        Debug,
+        Info,
+        Warn,
+        Error,
+        Fatal,
+    }
     public static class MajDebug
     {
         [HideInCallstack]
