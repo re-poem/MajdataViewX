@@ -938,7 +938,7 @@ namespace MajdataViewX.Managers
         {
             //重置一下sensor/button index
             MajBurst.InputData.ResetState();
-            for (int i = 0; i < taps.Length; i++)
+            for (var i = 0; i < taps.Length; i++)
             {
                 ref var tap = ref taps.ElementRef(i);
                 if (tap.Time < ignore)
@@ -948,7 +948,7 @@ namespace MajdataViewX.Managers
                 }
                 else tap.Reset();
             }
-            for (int i = 0; i < holds.Length; i++)
+            for (var i = 0; i < holds.Length; i++)
             {
                 ref var hold = ref holds.ElementRef(i);
                 if (hold.time < ignore)
@@ -958,13 +958,13 @@ namespace MajdataViewX.Managers
                 }
                 else hold.Reset();
             }
-            for (int i = 0; i < slides.Length; i++)
+            for (var i = 0; i < slides.Length; i++)
             {
                 ref var slide = ref slides.ElementRef(i);
-                if (slide.shootTime + slide.LastFor < ignore) slide.isEnd = true;
+                if (slide.shootTime < ignore) slide.isEnd = true;
                 else slide.Reset();
             }
-            for (int i = 0; i < touches.Length; i++)
+            for (var i = 0; i < touches.Length; i++)
             {
                 ref var touch = ref touches.ElementRef(i);
                 if (touch.time < ignore)
@@ -974,7 +974,7 @@ namespace MajdataViewX.Managers
                 }
                 else touch.Reset();
             }
-            for (int i = 0; i < touchHolds.Length; i++)
+            for (var i = 0; i < touchHolds.Length; i++)
             {
                 ref var th = ref touchHolds.ElementRef(i);
                 if (th.time < ignore)
