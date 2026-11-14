@@ -18,6 +18,8 @@ namespace MajdataViewX.Notes.Updaters
     [BurstCompile]
     public unsafe struct TapUpdateJob : IJobParallelFor
     {
+        // 渲染时要向左回看同组的折叠兄弟（只读），属于跨 index 访问
+        [NativeDisableParallelForRestriction]
         public NativeArray<TapData> taps;
 
         [NativeDisableParallelForRestriction]
@@ -68,6 +70,7 @@ namespace MajdataViewX.Notes.Updaters
             // sortTime (30 bits): [19 bits: time (87 mins wrap)] + [11 bits: index tie-breaker (2048 wrap)]
             var timePart = ((uint)math.max(0f, tap.Time * 100f)) & 0x7FFFF;
             var sortTime = ((timePart << 11) | (uint)(index & 0x7FF)) & 0x3FFFFFFF;
+            var foldedCount = (uint)CountFoldedCover(index, ignoreEnd: true);
 
             // show line
             if (destScale > 0.3f)
@@ -79,6 +82,7 @@ namespace MajdataViewX.Notes.Updaters
                     scale = lineScale,
                     spriteId = tap.LineSprite,
                     sort = sortTime,
+                    foldedCount = foldedCount,
                 };
             }
 
@@ -103,6 +107,7 @@ namespace MajdataViewX.Notes.Updaters
                 sliceBorder = float2.zero,
 
                 sort = sortTime,
+                foldedCount = foldedCount,
             };
         }
 
@@ -126,6 +131,7 @@ namespace MajdataViewX.Notes.Updaters
             // sortTime (30 bits): [19 bits: time (87 mins wrap)] + [11 bits: index tie-breaker (2048 wrap)]
             var timePart = ((uint)math.max(0f, tap.Time * 100f)) & 0x7FFFF;
             var sortTime = ((timePart << 11) | (uint)(index & 0x7FF)) & 0x3FFFFFFF;
+            var foldedCount = (uint)CountFoldedCover(index);
 
             // show line
             if (destScale > 0.3f)
@@ -137,6 +143,7 @@ namespace MajdataViewX.Notes.Updaters
                     scale = lineScale,
                     spriteId = tap.LineSprite,
                     sort = sortTime,
+                    foldedCount = foldedCount,
                 };
             }
 
@@ -172,7 +179,28 @@ namespace MajdataViewX.Notes.Updaters
                 sliceBorder = float2.zero,
 
                 sort = sortTime,
+                foldedCount = foldedCount,
             };
+        }
+
+        /// <summary>
+        /// 向前回看紧挨着的折叠兄弟（CanBeFolded 保证同组 note 连续存放），
+        /// 得到本实例应当代表的叠加层数（含自身）。
+        /// </summary>
+        /// <param name="ignoreEnd">
+        /// 预览（SeeOnly）模式不按 IsEnd 截断：加载后到播放前所有 note 的 IsEnd 都还是 true，
+        /// 而预览本来就不过滤已判定 note。
+        /// </param>
+        private int CountFoldedCover(int index, bool ignoreEnd = false)
+        {
+            var count = 1;
+            for (var i = index - 1; i >= 0; i--)
+            {
+                if (!taps[i].IsFolded) break;
+                if (ignoreEnd || taps[i].IsEnd)
+                    count++;
+            }
+            return count;
         }
 
         private void AutoplayUpdate(ref TapData tap)

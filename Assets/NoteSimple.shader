@@ -27,6 +27,7 @@ Shader "Custom/NoteSimple"
                 float4 color;
                 float brightness;
                 uint sort;
+                uint foldedCount;     // 本实例代表的重叠层数（含自身），>1 时还原叠加 alpha
             };
 
             StructuredBuffer<SimpleRenderData> _NoteBuffer;
@@ -40,6 +41,7 @@ Shader "Custom/NoteSimple"
                 float2 uv : TEXCOORD0; 
                 float4 rect : TEXCOORD1;
                 float4 color : TEXCOORD2;
+                nointerpolation uint foldedCount : TEXCOORD3;
             };
 
             v2f vert(appdata v, uint id : SV_InstanceID)
@@ -57,6 +59,7 @@ Shader "Custom/NoteSimple"
                 o.rect = rect;
                 o.color = note.color;
                 o.color.rgb *= note.brightness;
+                o.foldedCount = note.foldedCount;
                 return o;
             }
 
@@ -66,6 +69,14 @@ Shader "Custom/NoteSimple"
                 float4 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv);
                 col.rgb *= i.color.rgb;
                 col.a   *= i.color.a;
+
+                // ---- 折叠渲染还原 ----
+                // 同组 note 只绘制这一个实例，它代表 foldedCount 层同内容叠加，
+                // n 层 alpha 叠加的结果是 1-(1-a)^n，这里反解回单层 alpha。
+                [branch]
+                if (i.foldedCount > 1)
+                    col.a = 1.0 - pow(saturate(1.0 - col.a), (float)i.foldedCount);
+
                 col.rgb *= col.a; // premultiply
                 return col;
             }

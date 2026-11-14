@@ -22,6 +22,8 @@ namespace MajdataViewX.Notes.Updaters
     [BurstCompile]
     public unsafe struct SlideUpdateJob : IJobParallelFor
     {
+        // 渲染时要向左回看同组的折叠兄弟（只读），属于跨 index 访问
+        [NativeDisableParallelForRestriction]
         public NativeArray<SlideData> slides;
 
         [NativeDisableParallelForRestriction]
@@ -97,7 +99,7 @@ namespace MajdataViewX.Notes.Updaters
                 //正常需要等待slideok显示完才可以死
                 //folded不需要显示直接死
                 if (slide.isFolded) EndNote(ref slide);
-                else RenderSlideOK(ref slide);
+                else RenderSlideOK(ref slide, index);
                 return;
             }
 
@@ -162,6 +164,7 @@ namespace MajdataViewX.Notes.Updaters
             if (writeCount <= 0) return;
 
             var idx = Interlocked.Add(ref *SlidesWriteCountPtr, writeCount) - writeCount;
+            var foldedCount = (uint)CountFoldedCover(index);
             for (var i = startIdx; i < endIdx; i++)
             {
                 var p = slide.slideArrows[i];
@@ -176,6 +179,7 @@ namespace MajdataViewX.Notes.Updaters
                     brightness = slide.brightness,
                     // sort (32 bits): [19 bits: time] + [5 bits: slide tie-breaker (32 wrap)] + [8 bits: arrow path i (256 wrap)]
                     sort = (timePart << 13) | ((uint)(index & 0x1F) << 8) | ((uint)i & 0xFF),
+                    foldedCount = foldedCount,
                 };
             }
         }
@@ -183,6 +187,8 @@ namespace MajdataViewX.Notes.Updaters
         private void RenderStar(ref SlideData slide, int index, float timing, float tapTiming)
         {
             if (slide.isFolded) return;
+
+            var foldedCount = (uint)CountFoldedCover(index);
 
             // =====Star样式逻辑=====
             if (timing <= 0)
@@ -235,6 +241,7 @@ namespace MajdataViewX.Notes.Updaters
                     exColor = float4.zero,
                     sliceBorder = new float2(0, 0),
                     sort = 0x40000000u | sortTime,
+                    foldedCount = foldedCount,
                 };
             }
             else
@@ -263,6 +270,7 @@ namespace MajdataViewX.Notes.Updaters
                         exColor = float4.zero,
                         sliceBorder = new float2(0, 0),
                         sort = 0x40000000u | sortTime,
+                        foldedCount = foldedCount,
                     };
                 }
             }
@@ -678,8 +686,9 @@ namespace MajdataViewX.Notes.Updaters
             );
         }
 
-        private void RenderSlideOK(ref SlideData slide)
+        private void RenderSlideOK(ref SlideData slide, int index)
         {
+            var foldedCount = (uint)CountFoldedCover(index);
             var ok = slide.okPose;
 
             var baseJ = slide.okType switch
@@ -736,7 +745,23 @@ namespace MajdataViewX.Notes.Updaters
                 color = new float4(1, 1, 1, slide.slideOKAlpha),
                 brightness = slide.brightness,
                 sort = 0u,
+                foldedCount = foldedCount,
             };
+        }
+
+        /// <summary>
+        /// 向前回看紧挨着的折叠兄弟（CanBeFolded 保证同组 note 连续存放），
+        /// 得到本实例应当代表的叠加层数（含自身）。
+        /// </summary>
+        private int CountFoldedCover(int index)
+        {
+            var count = 1;
+            for (var i = index - 1; i >= 0; i--)
+            {
+                if (!slides[i].isFolded) break;
+                count++;
+            }
+            return count;
         }
 
         /// <summary>

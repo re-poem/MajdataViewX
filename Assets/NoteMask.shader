@@ -27,6 +27,7 @@ Shader "Custom/NoteMask"
                 float4 color;
                 float maskCutoff;
                 uint sort;
+                uint foldedCount;     // 本实例代表的重叠层数（含自身），>1 时还原叠加 alpha
             };
 
             StructuredBuffer<MaskRenderData> _NoteBuffer;
@@ -41,6 +42,7 @@ Shader "Custom/NoteMask"
                 float4 rect : TEXCOORD1;
                 float4 color : TEXCOORD2;
                 float maskCutoff : TEXCOORD3;
+                nointerpolation uint foldedCount : TEXCOORD4;
             };
 
             v2f vert(appdata v, uint id : SV_InstanceID)
@@ -58,6 +60,7 @@ Shader "Custom/NoteMask"
                 o.rect = rect;
                 o.color = note.color;
                 o.maskCutoff = note.maskCutoff;
+                o.foldedCount = note.foldedCount;
                 return o;
             }
 
@@ -82,6 +85,14 @@ Shader "Custom/NoteMask"
     
                 col.rgb *= i.color.rgb;
                 col.a   *= i.color.a;
+
+                // ---- 折叠渲染还原 ----
+                // 同组 note 只绘制这一个实例，它代表 foldedCount 层同内容叠加，
+                // n 层 alpha 叠加的结果是 1-(1-a)^n，这里反解回单层 alpha。
+                [branch]
+                if (i.foldedCount > 1)
+                    col.a = 1.0 - pow(saturate(1.0 - col.a), (float)i.foldedCount);
+
                 col.rgb *= col.a; // premultiply
                 return col;
             }

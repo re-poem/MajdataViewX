@@ -31,6 +31,7 @@ Shader "Custom/NoteRich"
                 float4 exColor;
                 float2 sliceBorder;   // (topFrac, botFrac), (0,0) = normal
                 uint sort;
+                uint foldedCount;     // 本实例代表的重叠层数（含自身），>1 时还原叠加 alpha
             };
 
             StructuredBuffer<NotesRenderData> _NoteBuffer;
@@ -48,6 +49,7 @@ Shader "Custom/NoteRich"
                 float4 exColor : TEXCOORD4;
                 float2 sliceBorder : TEXCOORD5;
                 float4 caps : TEXCOORD6; // x: topCapFrac, y: botCapFrac, z: middleFrac, w: sliceMid
+                nointerpolation uint foldedCount : TEXCOORD7;
             };
 
             v2f vert(appdata v, uint id : SV_InstanceID)
@@ -66,6 +68,7 @@ Shader "Custom/NoteRich"
                 o.pos = TransformObjectToHClip(float3(r, 0));
                 o.uv = v.uv;
                 o.rect = rect;
+                o.foldedCount = note.foldedCount;
                 
                 // Color with brightness applied
                 o.color = note.color;
@@ -165,6 +168,13 @@ Shader "Custom/NoteRich"
                 // ---- Vertex color + brightness ----
                 col.rgb *= i.color.rgb;
                 col.a   *= i.color.a;
+
+                // ---- 折叠渲染还原 ----
+                // 同组 note 只绘制这一个实例，它代表 foldedCount 层同内容叠加，
+                // n 层 alpha 叠加的结果是 1-(1-a)^n，这里反解回单层 alpha。
+                [branch]
+                if (i.foldedCount > 1)
+                    col.a = 1.0 - pow(saturate(1.0 - col.a), (float)i.foldedCount);
 
                 // Premultiply alpha
                 col.rgb *= col.a;

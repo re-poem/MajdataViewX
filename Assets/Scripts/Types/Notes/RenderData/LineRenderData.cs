@@ -9,6 +9,7 @@ namespace MajdataViewX.Types.Notes.RenderData
         public float scale;
         public NoteSp spriteId;
         public uint sort;
+        public uint foldedCount;
 
         public readonly uint SortKey => sort;
     }

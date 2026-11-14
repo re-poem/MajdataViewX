@@ -178,11 +178,6 @@ namespace MajdataViewX.Managers
 
             var lastSlideParts = ReadOnlySpan<SlidePart>.Empty;
             var lastSlideStart = SimaiNotePos.BTN0;
-            var sameTapCount = 0;
-            var sameHoldCount = 0;
-            var sameTouchCount = 0;
-            var sameTouchHoldCount = 0;
-            var sameSlideCount = 0;
             foreach (var note in notes)
             {
                 try
@@ -190,7 +185,7 @@ namespace MajdataViewX.Managers
                     switch (note.Type)
                     {
                         case SimaiNoteType.TAP:
-                            LoadTap(timing, note, ref sameTapCount);
+                            LoadTap(timing, note);
                             if (!note.IsMine)
                             {
                                 eachLineIgnoreSV |= note.IsIgnoreSV;
@@ -200,7 +195,7 @@ namespace MajdataViewX.Managers
                             }
                             break;
                         case SimaiNoteType.HOLD:
-                            LoadHold(timing, note, ref sameHoldCount);
+                            LoadHold(timing, note);
                             if (!note.IsMine)
                             {
                                 eachLineIgnoreSV |= note.IsIgnoreSV;
@@ -208,10 +203,10 @@ namespace MajdataViewX.Managers
                             }
                             break;
                         case SimaiNoteType.TOUCH:
-                            LoadTouch(timing, note, ref sameTouchCount);
+                            LoadTouch(timing, note);
                             break;
                         case SimaiNoteType.TOUCHHOLD:
-                            LoadTouchHold(timing, note, ref sameTouchHoldCount);
+                            LoadTouchHold(timing, note);
                             break;
                         case SimaiNoteType.SLIDE:
                             var parts = slideParts.Slice((int)note.SlidePartsFirst, (int)note.SlidePartsCount);
@@ -221,7 +216,6 @@ namespace MajdataViewX.Managers
                                 parts,
                                 lastSlideParts,
                                 lastSlideStart,
-                                ref sameSlideCount,
                                 ref loadedSlideLength[note.StartPos.GetPosNum() - 1],
                                 ref loadedSlideTime[note.StartPos.GetPosNum() - 1]);
                             lastSlideParts = parts;
@@ -474,8 +468,7 @@ namespace MajdataViewX.Managers
 
         private void LoadTap(
             in SimaiTiming timing,
-            in SimaiNote note,
-            ref int sameTapCount)
+            in SimaiNote note)
         {
             var key = (SensorType)(note.StartPos - 1);
             var tap = new TapData
@@ -498,11 +491,10 @@ namespace MajdataViewX.Managers
 
                 IsEnd = true
             };
-            if (note.CanBeFolded) sameTapCount++;
-            if (sameTapCount > 3)
-            {
-                taps.ElementRef(taps.Length - 3).IsFolded = true;
-            }
+            // 重复 note 靠在一起，CanBeFolded 说明它与前一个同组：折掉上一个，只留最后一个不折叠
+            // （渲染时用回看得到的折叠层数还原 alpha）
+            if (note.CanBeFolded && taps.Length > 0)
+                taps.ElementRef(taps.Length - 1).IsFolded = true;
             tap.Init();
             taps.Add(tap);
 
@@ -530,8 +522,7 @@ namespace MajdataViewX.Managers
 
         private void LoadHold(
             in SimaiTiming timing,
-            in SimaiNote note,
-            ref int sameHoldCount)
+            in SimaiNote note)
         {
             var key = (SensorType)(note.StartPos - 1);
             var hold = new HoldData
@@ -551,11 +542,9 @@ namespace MajdataViewX.Managers
 
                 isEnd = true
             };
-            if (note.CanBeFolded) sameHoldCount++;
-            if (sameHoldCount > 3)
-            {
-                holds.ElementRef(holds.Length - 3).isFolded = true;
-            }
+            // 重复 note 靠在一起，CanBeFolded 说明它与前一个同组：折掉上一个，只留最后一个不折叠
+            if (note.CanBeFolded && holds.Length > 0)
+                holds.ElementRef(holds.Length - 1).isFolded = true;
             hold.Init();
             holds.Add(hold);
 
@@ -583,8 +572,7 @@ namespace MajdataViewX.Managers
 
         private void LoadTouch(
             in SimaiTiming timing,
-            in SimaiNote note,
-            ref int sameTouchCount)
+            in SimaiNote note)
         {
             var sensor = note.StartPos.GetSensor();
             var touch = new TouchData
@@ -603,11 +591,9 @@ namespace MajdataViewX.Managers
 
                 isEnd = true
             };
-            if (note.CanBeFolded) sameTouchCount++;
-            if (sameTouchCount > 3)
-            {
-                touches.ElementRef(touches.Length - 3).isFolded = true;
-            }
+            // 重复 note 靠在一起，CanBeFolded 说明它与前一个同组：折掉上一个，只留最后一个不折叠
+            if (note.CanBeFolded && touches.Length > 0)
+                touches.ElementRef(touches.Length - 1).isFolded = true;
             touch.Init();
             touches.Add(touch);
             loadedTouches[(int)sensor].Add(new()
@@ -630,8 +616,7 @@ namespace MajdataViewX.Managers
 
         private void LoadTouchHold(
             in SimaiTiming timing,
-            in SimaiNote note,
-            ref int sameTouchHoldCount)
+            in SimaiNote note)
         {
             var sensor = note.StartPos.GetSensor();
             var th = new TouchHoldData
@@ -651,11 +636,9 @@ namespace MajdataViewX.Managers
 
                 isEnd = true
             };
-            if (note.CanBeFolded) sameTouchHoldCount++;
-            if (sameTouchHoldCount > 3)
-            {
-                touchHolds.ElementRef(touchHolds.Length - 3).isFolded = true;
-            }
+            // 重复 note 靠在一起，CanBeFolded 说明它与前一个同组：折掉上一个，只留最后一个不折叠
+            if (note.CanBeFolded && touchHolds.Length > 0)
+                touchHolds.ElementRef(touchHolds.Length - 1).isFolded = true;
             th.Init();
             touchHolds.Add(th);
 
@@ -676,7 +659,6 @@ namespace MajdataViewX.Managers
             ReadOnlySpan<SlidePart> parts,
             ReadOnlySpan<SlidePart> lastParts,
             SimaiNotePos lastStart,
-            ref int sameSlideCount,
             ref float loadedSlideLength,
             ref double loadedSlideTime)
         {
@@ -730,13 +712,13 @@ namespace MajdataViewX.Managers
 
                     isEnd = true
                 };
-                ApplySlideFolding(ref slide, note.StartPos, parts, lastStart, lastParts, ref sameSlideCount);
+                var duplicatedSlide = ApplySlideFolding(ref slide, note.StartPos, parts, lastStart, lastParts);
                 slide.Init();
                 slides.Add(slide);
 
                 if (!note.IsMine &&
                     NoteHelper.Settings.AutoPlayMode is AutoPlayMode.DJAutoButton or AutoPlayMode.DJAutoSensor &&
-                    sameSlideCount == 1) // slide跟别人一样就不用鸟
+                    !duplicatedSlide) // slide跟别人一样就不用鸟
                 {
                     // wifi 双手：发射两个 play(side -1/+1)，FindNext 按偏移后中点就近分配，无强制左绑左右绑右
                     plays.Add(new DJAutoPlayData(
@@ -846,13 +828,13 @@ namespace MajdataViewX.Managers
 
                     isEnd = true
                 };
-                ApplySlideFolding(ref slide, note.StartPos, parts, lastStart, lastParts, ref sameSlideCount);
+                var duplicatedSlide = ApplySlideFolding(ref slide, note.StartPos, parts, lastStart, lastParts);
                 slide.Init();
                 slides.Add(slide);
 
                 if (!note.IsMine &&
                     NoteHelper.Settings.AutoPlayMode is AutoPlayMode.DJAutoButton or AutoPlayMode.DJAutoSensor &&
-                    sameSlideCount == 1) // slide跟别人一样就不用鸟
+                    !duplicatedSlide) // slide跟别人一样就不用鸟
                 {
                     plays.Add(new DJAutoPlayData(
                         slides.Length - 1,
@@ -870,13 +852,13 @@ namespace MajdataViewX.Managers
             loadedSlideLength += metadata.SlideLength;
             loadedSlideTime += note.Duration;
         }
-        private void ApplySlideFolding(
+        /// <returns>与上一个 slide 重复（会被折叠掉）时为 true</returns>
+        private bool ApplySlideFolding(
             ref SlideData slide,
             SimaiNotePos start,
             ReadOnlySpan<SlidePart> parts,
             SimaiNotePos lastStart,
-            ReadOnlySpan<SlidePart> lastParts,
-            ref int sameSlideCount)
+            ReadOnlySpan<SlidePart> lastParts)
         {
             var matchesPrevious =
                 start == lastStart &&
@@ -884,11 +866,11 @@ namespace MajdataViewX.Managers
                 slides.Length > 0 &&
                 slides[^1].IsFoldablePropOnly(slide);
 
-            sameSlideCount = matchesPrevious ? sameSlideCount + 1 : 1;
-            if (sameSlideCount > 3)
-            {
-                slides.ElementRef(slides.Length - 3).isFolded = true;
-            }
+            // 同组只保留最后一个不折叠，渲染时用回看得到的折叠层数还原 alpha
+            if (matchesPrevious)
+                slides.ElementRef(slides.Length - 1).isFolded = true;
+
+            return matchesPrevious;
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool SlidePartsEqual(ReadOnlySpan<SlidePart> left, ReadOnlySpan<SlidePart> right)

@@ -13,6 +13,7 @@ namespace MajdataViewX.Types.Notes.RenderData
         public float4 color;
         public float maskCutoff;
         public uint sort;
+        public uint foldedCount;
 
         public readonly uint SortKey => sort;
     }

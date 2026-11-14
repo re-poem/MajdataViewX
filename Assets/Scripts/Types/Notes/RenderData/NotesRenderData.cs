@@ -17,6 +17,7 @@ namespace MajdataViewX.Types.Notes.RenderData
         public float4 exColor;
         public float2 sliceBorder;   // (topFrac, botFrac), (0,0) = normal
         public uint sort;
+        public uint foldedCount;
 
         public readonly uint SortKey => sort;
     }

@@ -20,6 +20,8 @@ namespace MajdataViewX.Notes.Updaters
     [BurstCompile]
     public unsafe struct TouchHoldUpdateJob : IJobParallelFor
     {
+        // 渲染时要向左回看同组的折叠兄弟（只读），属于跨 index 访问
+        [NativeDisableParallelForRestriction]
         public NativeArray<TouchHoldData> touchHolds;
 
         [NativeDisableParallelForRestriction]
@@ -108,6 +110,7 @@ namespace MajdataViewX.Notes.Updaters
             // sortTime (30 bits): [19 bits: time (87 mins wrap)] + [11 bits: index tie-breaker (2048 wrap)]
             var timePart = ((uint)math.max(0f, th.time * 100f)) & 0x7FFFF;
             var sortTime = ((timePart << 11) | (uint)(index & 0x7FF)) & 0x3FFFFFFF;
+            var foldedCount = (uint)CountFoldedCover(index, ignoreEnd: true);
 
             for (int i = 0; i < 4; i++)
             {
@@ -121,6 +124,7 @@ namespace MajdataViewX.Notes.Updaters
                     color = color,
                     brightness = 1f,
                     sort = (sortTime << 2) | 0x3,
+                    foldedCount = foldedCount,
                 };
             }
 
@@ -134,6 +138,7 @@ namespace MajdataViewX.Notes.Updaters
                 color = color,
                 brightness = 1f,
                 sort = (sortTime << 2) | 0x2,
+                foldedCount = foldedCount,
             };
 
             var borderIdx = Interlocked.Increment(ref *MaskWriteCountPtr) - 1;
@@ -146,6 +151,7 @@ namespace MajdataViewX.Notes.Updaters
                 color = color,
                 maskCutoff = th.maskProgress,
                 sort = sortTime,
+                foldedCount = foldedCount,
             };
         }
 
@@ -157,6 +163,7 @@ namespace MajdataViewX.Notes.Updaters
             // sortTime (30 bits): [19 bits: time (87 mins wrap)] + [11 bits: index tie-breaker (2048 wrap)]
             var timePart = ((uint)math.max(0f, th.time * 100f)) & 0x7FFFF;
             var sortTime = ((timePart << 11) | (uint)(index & 0x7FF)) & 0x3FFFFFFF;
+            var foldedCount = (uint)CountFoldedCover(index);
 
             var timing = th.isIgnoreSV
                 ? TimeData.NoteTime - th.time
@@ -240,6 +247,7 @@ namespace MajdataViewX.Notes.Updaters
                     color = color,
                     brightness = 1f,
                     sort = (sortTime << 2) | 0x3,
+                    foldedCount = foldedCount,
                 };
             }
 
@@ -253,6 +261,7 @@ namespace MajdataViewX.Notes.Updaters
                 color = color,
                 brightness = 1f,
                 sort = (sortTime << 2) | 0x2,
+                foldedCount = foldedCount,
             };
 
             var borderIdx = Interlocked.Increment(ref *MaskWriteCountPtr) - 1;
@@ -265,7 +274,28 @@ namespace MajdataViewX.Notes.Updaters
                 color = color,
                 maskCutoff = th.maskProgress,
                 sort = sortTime,
+                foldedCount = foldedCount,
             };
+        }
+
+        /// <summary>
+        /// 向前回看紧挨着的折叠兄弟（CanBeFolded 保证同组 note 连续存放），
+        /// 得到本实例应当代表的叠加层数（含自身）。
+        /// </summary>
+        /// <param name="ignoreEnd">
+        /// 预览（SeeOnly）模式不按 isEnd 截断：加载后到播放前所有 note 的 isEnd 都还是 true，
+        /// 而预览本来就不过滤已判定 note。
+        /// </param>
+        private int CountFoldedCover(int index, bool ignoreEnd = false)
+        {
+            var count = 1;
+            for (var i = index - 1; i >= 0; i--)
+            {
+                if (!touchHolds[i].isFolded) break;
+                if (ignoreEnd || touchHolds[i].isEnd)
+                    count++;
+            }
+            return count;
         }
 
         private void AutoplayUpdate(ref TouchHoldData th)

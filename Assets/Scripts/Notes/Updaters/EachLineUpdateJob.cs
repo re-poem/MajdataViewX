@@ -55,6 +55,7 @@ namespace MajdataViewX.Notes.Updaters
                 scale = clampedDistance / 4.8f,
                 spriteId = el.lineSprite,
                 sort = sortTime,
+                foldedCount = 1,   // eachLine 不去重渲染，恒为单层
             };
         }
     }

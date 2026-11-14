@@ -20,6 +20,8 @@ namespace MajdataViewX.Notes.Updaters
     [BurstCompile]
     public unsafe struct TouchUpdateJob : IJobParallelFor
     {
+        // 渲染时要向左回看同组的折叠兄弟（只读），属于跨 index 访问
+        [NativeDisableParallelForRestriction]
         public NativeArray<TouchData> touches;
 
         [NativeDisableParallelForRestriction]
@@ -56,6 +58,7 @@ namespace MajdataViewX.Notes.Updaters
             // sortTime (30 bits): [19 bits: time (87 mins wrap)] + [11 bits: index tie-breaker (2048 wrap)]
             var timePart = ((uint)math.max(0f, touch.time * 100f)) & 0x7FFFF;
             var sortTime = ((timePart << 11) | (uint)(index & 0x7FF)) & 0x3FFFFFFF;
+            var foldedCount = (uint)CountFoldedCover(index, ignoreEnd: true);
 
             var timing = touch.isIgnoreSV
                 ? TimeData.NoteTime - touch.time
@@ -99,6 +102,7 @@ namespace MajdataViewX.Notes.Updaters
                     color = new float4(1, 1, 1, touch.fanAlpha),
                     brightness = 1f,
                     sort = (sortTime << 2) | 0x3,
+                    foldedCount = foldedCount,
                 };
             }
 
@@ -112,6 +116,7 @@ namespace MajdataViewX.Notes.Updaters
                 color = new float4(1, 1, 1, touch.fanAlpha),
                 brightness = 1f,
                 sort = (sortTime << 2) | 0x2,
+                foldedCount = foldedCount,
             };
 
             if (timing > -0.02f)
@@ -126,6 +131,7 @@ namespace MajdataViewX.Notes.Updaters
                     color = new float4(1),
                     brightness = 1f,
                     sort = (sortTime << 2) | 0x1,
+                    foldedCount = foldedCount,
                 };
             }
         }
@@ -138,6 +144,7 @@ namespace MajdataViewX.Notes.Updaters
             // sortTime (30 bits): [19 bits: time (87 mins wrap)] + [11 bits: index tie-breaker (2048 wrap)]
             var timePart = ((uint)math.max(0f, touch.time * 100f)) & 0x7FFFF;
             var sortTime = ((timePart << 11) | (uint)(index & 0x7FF)) & 0x3FFFFFFF;
+            var foldedCount = (uint)CountFoldedCover(index);
 
             var timing = touch.isIgnoreSV
                 ? TimeData.NoteTime - touch.time
@@ -187,6 +194,7 @@ namespace MajdataViewX.Notes.Updaters
                     color = new float4(1, 1, 1, touch.fanAlpha),
                     brightness = 1f,
                     sort = (sortTime << 2) | 0x3,
+                    foldedCount = foldedCount,
                 };
             }
 
@@ -200,6 +208,7 @@ namespace MajdataViewX.Notes.Updaters
                 color = new float4(1, 1, 1, touch.fanAlpha),
                 brightness = 1f,
                 sort = (sortTime << 2) | 0x2,
+                foldedCount = foldedCount,
             };
 
             if (timing > -0.02f)
@@ -214,6 +223,7 @@ namespace MajdataViewX.Notes.Updaters
                     color = new float4(1),
                     brightness = 1f,
                     sort = (sortTime << 2) | 0x1,
+                    foldedCount = foldedCount,
                 };
             }
 
@@ -230,8 +240,29 @@ namespace MajdataViewX.Notes.Updaters
                     color = new float4(1, 1, 1, touch.fanAlpha),
                     brightness = 1f,
                     sort = sortTime << 2,
+                    foldedCount = foldedCount,
                 };
             }
+        }
+
+        /// <summary>
+        /// 向前回看紧挨着的折叠兄弟（CanBeFolded 保证同组 note 连续存放），
+        /// 得到本实例应当代表的叠加层数（含自身）。
+        /// </summary>
+        /// <param name="ignoreEnd">
+        /// 预览（SeeOnly）模式不按 isEnd 截断：加载后到播放前所有 note 的 isEnd 都还是 true，
+        /// 而预览本来就不过滤已判定 note。
+        /// </param>
+        private int CountFoldedCover(int index, bool ignoreEnd = false)
+        {
+            var count = 1;
+            for (var i = index - 1; i >= 0; i--)
+            {
+                if (!touches[i].isFolded) break;
+                if (ignoreEnd || touches[i].isEnd)
+                    count++;
+            }
+            return count;
         }
 
         private void AutoplayUpdate(ref TouchData touch)
