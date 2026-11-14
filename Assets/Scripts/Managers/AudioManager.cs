@@ -48,9 +48,9 @@ namespace MajdataViewX.Managers
         private NativeArray<float> _recordingBuffer;
         private int _recordingSampleCount;
         private int _recordingPreviousTouchHoldCount;
-        private float _recordingInitialAudioTime;
+        private double _recordingInitialAudioTime;
+        private double _recordingInitialNoteTime;
         private float _recordingSpeed = 1f;
-        private float _recordingInitialNoteTime;
         private readonly int[][] _sfxPlayPointers = new int[SFX_COUNT][]; //-1 is not playing
 
         /// <summary>
@@ -453,7 +453,7 @@ namespace MajdataViewX.Managers
 
         //recording control
 
-        public void BeginRecordingAudio(float initialAudioTime, float speed)
+        public void BeginRecordingAudio(double initialAudioTime, float speed)
         {
             _recordingInitialAudioTime = initialAudioTime;
             _recordingSpeed = Math.Max(speed, 0.01f);
@@ -731,7 +731,7 @@ namespace MajdataViewX.Managers
 
                 for (var ch = 0; ch < CHANNELS; ch++)
                 {
-                    var sample = Mathf.Lerp(_trackSampleData[srcIdx + ch], _trackSampleData[nextSrcIdx + ch], t);
+                    var sample = Mathf.Lerp(_trackSampleData[srcIdx + ch], _trackSampleData[nextSrcIdx + ch], (float)t);
                     var mixed = _recordingBuffer[dstIdx + ch] + sample * _trackSampleVolume;
                     _recordingBuffer[dstIdx + ch] = Math.Clamp(mixed, -1.0f, 1.0f);
                 }

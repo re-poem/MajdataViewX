@@ -1,5 +1,5 @@
 #if UNITY_STANDALONE_WIN || UNITY_STANDALONE_OSX || UNITY_STANDALONE_LINUX || UNITY_EDITOR
-#define MMF_USABLE
+#define SHM_USABLE
 #endif
 
 using Cimai;
@@ -7,9 +7,8 @@ using MajdataViewX.Base;
 using MajdataViewX.Types.Protocol;
 using System;
 using System.Diagnostics;
-using System.IO;
-#if MMF_USABLE
-using System.IO.MemoryMappedFiles;
+#if SHM_USABLE
+using EasyShm;
 #endif
 using Unity.Burst;
 using Unity.Collections;
@@ -27,57 +26,36 @@ namespace MajdataViewX.Managers
         public bool IsRecord { get; private set; }
 
         //audio get this value
-        public float AudioTime { get; private set; }
+        public double AudioTime { get; private set; }
         //notes get this value
-        public float NoteTime { get; private set; }
-        public float FakeNoteTime => TimeData.GetPositionAtTime(NoteTime);
+        public double NoteTime { get; private set; }
         public float CurrentSpeed => IsRecord ? Time.timeScale : _speed;
 
         private NativeList<(float time, float sVeloc)> _svList = new(20, Allocator.Persistent);
         private NativeArray<(float k, float b)> _svFuncArgs;
 
-        private float _startAt; //the beginning of the audio is 0
-        private float _offset;
+        private double _startAt; //the beginning of the audio is 0
+        private double _offset;
         private float _speed;
         /// <summary>录制模式每帧固定的游戏时间步长（speed / fps）；captureFramerate 已按帧计时，不再依赖 Time.timeAsDouble。</summary>
         private double _recordTime;
-        private float _recordStep;
+        private double _recordStep;
 
         private readonly Stopwatch _playbackClock = new();
 
 
 
-#if MMF_USABLE
-        private MemoryMappedFile _mmfAudioTime;
-        private MemoryMappedViewAccessor _mmvAudioTime;
+#if SHM_USABLE
+        private readonly ISharedMemory<double> _shm =
+            SharedMemory.CreateOrOpen<double>(MajEnv.PlayheadShmName, 1);
 #endif
 
-        public const float SONG_DETAIL_OFFSET = 5f;
+        public const double SONG_DETAIL_OFFSET = 5.0;
 
         private void Awake()
         {
             _timeProvider = this;
             ResetState();
-
-#if MMF_USABLE
-            var mmfAudioTimeFileStream = new FileStream(
-                MajEnv.MmfAudioTimePath,
-                FileMode.OpenOrCreate,
-                FileAccess.ReadWrite,
-                FileShare.ReadWrite
-            );
-            if (mmfAudioTimeFileStream.Length < sizeof(float))
-                mmfAudioTimeFileStream.SetLength(sizeof(float));
-            _mmfAudioTime = MemoryMappedFile.CreateFromFile(
-                mmfAudioTimeFileStream,
-                null,
-                sizeof(float),
-                MemoryMappedFileAccess.ReadWrite,
-                HandleInheritability.None,
-                false
-            );
-            _mmvAudioTime = _mmfAudioTime.CreateViewAccessor();
-#endif
         }
 
         private void Update()
@@ -86,26 +64,25 @@ namespace MajdataViewX.Managers
             TimeData.deltaTime = IsRecord ? FRAME_LENGTH_SEC : Time.deltaTime;
             if (!IsStart)
             {
-#if MMF_USABLE
-                _mmvAudioTime.Read(0, out float time);
-                AudioTime = time;
-                NoteTime = AudioTime - _offset;
-                TimeData.NoteTime = NoteTime;
+#if SHM_USABLE
+                AudioTime = _shm.Span[0];
 #endif
+                NoteTime = AudioTime - _offset;
+                TimeData.NoteTime = (float)NoteTime;
                 return;
             }
 
             if (IsRecord)
-                AudioTime = (float)(_recordTime += _recordStep);
+                AudioTime = _recordTime += _recordStep;
             else
-                AudioTime = (float)(_startAt + _playbackClock.Elapsed.TotalSeconds * _speed);
+                AudioTime = _startAt + _playbackClock.Elapsed.TotalSeconds * _speed;
 
-#if MMF_USABLE
-            _mmvAudioTime.Write(0, AudioTime);
+#if SHM_USABLE
+            _shm.Span[0] = AudioTime;
 #endif
 
             NoteTime = AudioTime - _offset;
-            TimeData.NoteTime = NoteTime;
+            TimeData.NoteTime = (float)NoteTime;
         }
 
         public unsafe void LoadSV(ReadOnlySpan<SimaiTiming> commaTimings)
@@ -153,8 +130,8 @@ namespace MajdataViewX.Managers
         {
             ResetState();
 
-            _startAt = (float)startAt;
-            _offset = (float)offset;
+            _startAt = startAt;
+            _offset = offset;
             _speed = speed;
 
             switch (mode)
@@ -180,7 +157,7 @@ namespace MajdataViewX.Managers
                         _startAt -= SONG_DETAIL_OFFSET;
                         // 固定步进：一帧渲染就推进 speed/fps 的游戏时间，和视频帧号严格 1:1，
                         // 不受真实渲染速度与 timeScale 组合语义影响。
-                        _recordStep = Mathf.Max(speed, 0.01f) / Mathf.Max(1, fps);
+                        _recordStep = Mathf.Max(speed, 0.01f) / (double)Mathf.Max(1, fps);
                         _recordTime = _startAt - _recordStep;
                         Time.timeScale = speed;
                         Time.captureFramerate = fps;
@@ -212,11 +189,6 @@ namespace MajdataViewX.Managers
 
         private void OnDestroy()
         {
-#if MMF_USABLE
-            _mmvAudioTime?.Dispose();
-            _mmfAudioTime?.Dispose();
-#endif
-
             if (_svList.IsCreated) _svList.Dispose();
             if (_svFuncArgs.IsCreated) _svFuncArgs.Dispose();
         }

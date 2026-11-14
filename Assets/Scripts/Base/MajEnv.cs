@@ -22,8 +22,8 @@ namespace MajdataViewX.Base
 
         public static string GetPath(string relativePath) =>
             Path.Combine(MajBase, relativePath);
-
-        public static string MmfAudioTimePath => GetPath("majdata_time.dat");
+        
+        public const string PlayheadShmName = "majdata_playhead";
         public static string RecordingDirectory => GetPath("Record");
 
         #region Bass
