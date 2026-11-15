@@ -126,12 +126,12 @@ namespace MajdataViewX.Managers
             TimeData.SVFuncArgsLength = _svFuncArgs.Length;
         }
 
-        public void SetStartTime(double startAt, double offset, float speed, PlaybackMode mode, int fps = 60)
+        public void SetOffset(double offset) => _offset = offset;
+        public void SetStartTime(double startAt, float speed, PlaybackMode mode, int fps = 60)
         {
             ResetState();
 
             _startAt = startAt;
-            _offset = offset;
             _speed = speed;
 
             switch (mode)
@@ -173,12 +173,13 @@ namespace MajdataViewX.Managers
 
         public void ResetState()
         {
+            // 注释掉的为停止时要保留的状态
             IsStart = false;
             IsRecord = false;
-            AudioTime = 0f;
-            NoteTime = 0f;
+            //AudioTime = 0f;
+            //NoteTime = 0f;
             _startAt = 0f;
-            _offset = 0f;
+            //_offset = 0f;
             _speed = 1f;
             _recordStep = 0f;
             _recordTime = 0;

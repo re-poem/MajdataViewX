@@ -184,12 +184,14 @@ namespace MajdataViewX.Managers
 
             _chart?.Dispose();
             _chart = chart;
-            _currentOffset = offset;
 
+            _currentOffset = offset;
+            _timeProvider.SetOffset(offset);
+            
             //answer
+            _audioManager.NoteOffset = offset;
             // TODO: MajProtocol 2.0 的 SimaiRequest 没有 clock_count 字段，这里先固定为 4，
             // 之后改为从 Simai 内容的 &clock_count 指令解析。
-            _audioManager.NoteOffset = offset;
             _audioManager.GenerateAnswerSFX(chart, 4);
 
             //counter
@@ -238,7 +240,7 @@ namespace MajdataViewX.Managers
                     case PlaybackMode.Normal:
                         _allPerfectManager.enabled = false;
 
-                        _timeProvider.SetStartTime(startAt, _currentOffset, speed, playmode);
+                        _timeProvider.SetStartTime(startAt, speed, playmode);
                         _audioManager.PlayTrack();
                         break;
                     case PlaybackMode.IncludeOp:
@@ -247,7 +249,7 @@ namespace MajdataViewX.Managers
                         _bgManager.PlaySongDetail();
                         _audioManager.noteSfxPlaybackRequests[AudioManager.TRACK_START] = true; //track_start
 
-                        _timeProvider.SetStartTime(startAt, _currentOffset, speed, playmode);
+                        _timeProvider.SetStartTime(startAt, speed, playmode);
                         _audioManager.PlayTrack();
                         break;
                     case PlaybackMode.Record:
@@ -262,7 +264,7 @@ namespace MajdataViewX.Managers
                             _setting.OutputFps, _setting.ExportQuality,
                             () =>
                             {
-                                _timeProvider.SetStartTime(startAt, _currentOffset, speed, playmode, _setting.OutputFps);
+                                _timeProvider.SetStartTime(startAt, speed, playmode, _setting.OutputFps);
                             }).ContinueWith(() =>
                         {
                             _canvasButtons.SetActive(true);
