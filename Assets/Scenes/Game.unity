@@ -494,7 +494,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_FontData:
-    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+    m_Font: {fileID: 12800000, guid: 94316f67c2a7368c88d727ee5e9c3c0a, type: 3}
     m_FontSize: 2
     m_FontStyle: 0
     m_BestFit: 1
@@ -4017,7 +4017,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1344c3c82d62a2a41a3576d8abb8e3ea, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.RawImage
   m_Material: {fileID: 2100000, guid: 58b71fdfceaec5b4c9eed8d4fa6fc443, type: 2}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -4361,9 +4361,9 @@ MonoBehaviour:
     m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
     m_FontSize: 14
     m_FontStyle: 0
-    m_BestFit: 0
-    m_MinSize: 10
-    m_MaxSize: 40
+    m_BestFit: 1
+    m_MinSize: 1
+    m_MaxSize: 14
     m_Alignment: 3
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -5784,9 +5784,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: caa7b6dbf6805825bc91b808e026b85c, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: MajdataPlay.FFmpeg::MajdataPlay.FFmpeg.FFmpegVideoPlayer
-  _source:
+  _source: 
   <PlayOnAwake>k__BackingField: 0
   <Loop>k__BackingField: 0
   _playbackRate: 1
@@ -5808,8 +5808,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3ca526cac7312c54498bf8bf99e86413, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   bgDummy: {fileID: 21300000, guid: 30663c3fa610ab742aa9f7e584136105, type: 3}
   defaultBg: {fileID: 21300000, guid: e76da1c30dfa99d4f88a60d737457499, type: 3}
   fullscreenBgMaterial: {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
@@ -7938,7 +7938,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f01698c5e0e946d5843ff160ac9768e3, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: MajdataPlay.FFmpeg::MajdataPlay.FFmpeg.FFmpegCameraCapturer
   _targetCamera: {fileID: 519420031}
   _options:
@@ -8190,12 +8190,12 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_FontData:
-    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+    m_Font: {fileID: 12800000, guid: 94316f67c2a7368c88d727ee5e9c3c0a, type: 3}
     m_FontSize: 14
     m_FontStyle: 0
-    m_BestFit: 0
-    m_MinSize: 10
-    m_MaxSize: 40
+    m_BestFit: 1
+    m_MinSize: 1
+    m_MaxSize: 14
     m_Alignment: 3
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -9885,7 +9885,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 2100000, guid: 58b71fdfceaec5b4c9eed8d4fa6fc443, type: 2}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
