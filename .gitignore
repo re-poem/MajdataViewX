@@ -49,21 +49,18 @@ UserSettings/*
 [Ll]ogs/*
 */[Ll]ogs/
 
-majdata.json
 UserSettings/Layouts/default-2021.dwlt
 UserSettings/Layouts/default-2022.dwlt
 SFX
 Skin
+!Assets/StreamingAssets/SFX/
+!Assets/StreamingAssets/Skin/
 majdata_time.dat
 
 # Plugins
 Assets/Plugins/UniTask/
 /Assets/Editor/CompilationNotifier.cs
 /Assets/Editor/CompilationNotifier.cs.meta
+
 /.mimocode
-
-# Local FFmpeg/x264 source trees and build intermediates
-/ffmpeg-builder/.work/
-/ffmpeg-builder/dist/
-
 Record/
