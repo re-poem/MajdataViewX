@@ -4,6 +4,7 @@ using MajdataViewX.Types;
 using MajdataViewX.Types.Enums;
 using Cimai;
 using System;
+using MajdataViewX.Utils;
 using TMPro;
 using UnityEngine;
 using static MajdataViewX.Base.MajCtx;
@@ -177,27 +178,14 @@ namespace MajdataViewX.Managers
             }
         }
 
-        public void ReportMeterBpm(SimaiChart chart)
+        public void ReportMeterBpm(ReadOnlySpan<char> fumen, ReadOnlySpan<SimaiTiming> timings)
         {
             meterList.Clear();
             bpmList.Clear();
 
-            foreach (var timing in chart.Timings)
+            foreach (var timing in timings)
             {
-                var lastNum = 0;
-                var lastDen = 0;
-                if (meterList.Count > 0)
-                {
-                    var lastMeter = meterList[^1];
-                    lastNum = lastMeter.Numerator;
-                    lastDen = lastMeter.Denominator;
-                }
-
-                if (timing.SignNum != lastNum || timing.SignDen != lastDen)
-                    meterList.Add((
-                        timing.Time,
-                        timing.SignNum,
-                        timing.SignDen));
+                meterList = FumenHelper.ParseSignature(fumen);
 
                 var lastBpm = bpmList.Count > 0 ? bpmList[^1].Bpm : 0;
                 if (timing.Bpm != lastBpm)
@@ -460,7 +448,7 @@ namespace MajdataViewX.Managers
                 for (var i = meterList.Count - 1; i >= 0; i--)
                 {
                     var meter = meterList[i];
-                    if (meter.Timing > time) continue;
+                    if (meter.Time > time) continue;
 
                     outputBuilder.Clear();
                     outputBuilder.Append(meter.Numerator);

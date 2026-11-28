@@ -18,9 +18,7 @@ PluginImporter:
       settings:
         'Exclude ': 1
         Exclude Android: 1
-        Exclude Bratwurst: 1
         Exclude CloudRendering: 1
-        Exclude Editor: 1
         Exclude EmbeddedLinux: 1
         Exclude GameCoreScarlett: 1
         Exclude GameCoreXboxOne: 1
@@ -35,7 +33,6 @@ PluginImporter:
         Exclude VisionOS: 1
         Exclude WebGL: 1
         Exclude Win: 1
-        Exclude Win64: 1
         Exclude WindowsStoreApps: 1
         Exclude XboxOne: 1
         Exclude iOS: 1
@@ -46,12 +43,6 @@ PluginImporter:
         CPU: x86_64
         DefaultValueInitialized: true
         OS: Windows
-    Linux64:
-      enabled: 0
-      settings: {}
-    OSXUniversal:
-      enabled: 0
-      settings: {}
     Win:
       enabled: 0
       settings:
@@ -64,9 +55,6 @@ PluginImporter:
       enabled: 0
       settings:
         CPU: x64
-    iOS:
-      enabled: 0
-      settings: {}
   userData: 
   assetBundleName: 
   assetBundleVariant: 

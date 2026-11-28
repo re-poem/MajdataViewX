@@ -182,6 +182,7 @@ namespace MajdataViewX.Managers
                     chart = SimaiChart.Parse(sourcePtr, source.Length);
             }
 
+            // 此处chart仅有传递timing/note数据的作用
             _chart?.Dispose();
             _chart = chart;
 
@@ -197,7 +198,7 @@ namespace MajdataViewX.Managers
             //counter
             _objectCounter.ResetLoaded();
             _objectCounter.CountNoteSum(chart);
-            _objectCounter.ReportMeterBpm(chart);
+            _objectCounter.ReportMeterBpm(chartText.AsSpan(), chart.Timings);
 
             await _dataLoader.Load(chart, title, artist, level, designer, difficulty);
 

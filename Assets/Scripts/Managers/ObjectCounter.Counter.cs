@@ -3,6 +3,7 @@ using MajdataViewX.Types.Notes;
 using Cimai;
 using System;
 using System.Collections.Generic;
+using MajdataViewX.Utils;
 using Unity.Collections;
 using UnityEngine;
 
@@ -128,17 +129,17 @@ namespace MajdataViewX.Managers
         readonly Dictionary<JudgeGrade, int> judgedBreakCount = new();
         readonly Dictionary<JudgeGrade, int> totalJudgedCount = new();
 
-        readonly List<(double Timing, int Numerator, int Denominator)> meterList = new();
-        readonly List<(double Timing, float Bpm)> bpmList = new();
+        List<Signature> meterList = new();
+        List<(double Timing, float Bpm)> bpmList = new();
 
         private NativeList<ReportResultEntry> reportRequests = new(65536, Allocator.Persistent);
         public NativeList<ReportResultEntry>.ParallelWriter ReportRequestsWriter => reportRequests.AsParallelWriter();
 
-        public void CountNoteSum(SimaiChart chart)
+        public void CountNoteSum(SimaiChart data)
         {
-            foreach (var timing in chart.Timings)
+            foreach (var timing in data.Timings)
             {
-                foreach (var note in chart.Notes.Slice((int)timing.NotesFirst, (int)timing.NotesCount))
+                foreach (var note in data.Notes.Slice((int)timing.NotesFirst, (int)timing.NotesCount))
                 {
                     if (!note.IsBreak)
                     {
@@ -171,12 +172,12 @@ namespace MajdataViewX.Managers
             totalDXScore = NoteSum * 3;
         }
 
-        public void CountIgnoreNoteCountAsync(SimaiChart chart, double ignore)
+        public void CountIgnoreNoteCountAsync(SimaiChart data, double ignore)
         {
-            foreach (var timing in chart.Timings)
+            foreach (var timing in data.Timings)
             {
                 if (timing.Time >= ignore) continue;
-                foreach (var note in chart.Notes.Slice((int)timing.NotesFirst, (int)timing.NotesCount))
+                foreach (var note in data.Notes.Slice((int)timing.NotesFirst, (int)timing.NotesCount))
                 {
                     if (note.Type is SimaiNoteType.SLIDE && 
                         timing.Time + note.SlideShootDelay >= ignore)

@@ -68,6 +68,56 @@ providers = {
 		priority = -10
 		defaultAction = null
 	}
+	light2dmaterial = {
+		active = true
+		priority = 100
+		defaultAction = null
+	}
+	shadow2dmaterial = {
+		active = true
+		priority = 100
+		defaultAction = null
+	}
+	lightmaps = {
+		active = true
+		priority = 100
+		defaultAction = null
+	}
+	uiengine = {
+		active = true
+		priority = 100
+		defaultAction = null
+	}
+	uicustom = {
+		active = true
+		priority = 100
+		defaultAction = null
+	}
+	"project-auditor-descriptors" = {
+		active = true
+		priority = 100
+		defaultAction = null
+	}
+	"project-auditor-issues" = {
+		active = true
+		priority = 100
+		defaultAction = null
+	}
+	"toolbar-elements" = {
+		active = true
+		priority = 100
+		defaultAction = null
+	}
+	"toolbar-favorites" = {
+		active = true
+		priority = 100
+		defaultAction = null
+	}
+	uiuxml = {
+		active = true
+		priority = 200
+		defaultAction = null
+	}
 }
 objectSelectors = {
 }
@@ -83,9 +133,10 @@ logIndexingPerformanceReport = false
 expandedQueries = [
 ]
 queryBuilder = false
-ignoredProperties = "id;name;classname;imagecontentshash"
+ignoredProperties = "addedobjectfileids;classname;correspondingsourceobject;editorclassidentifier;editorhideflags;fileid;gameobject;id;imagecontentshash;isprefabvariant;name;objecthideflags;pathid;prefabasset;prefabinstance;script"
 helperWidgetCurrentArea = "all"
 disabledIndexers = ""
 minIndexVariations = 2
 findProviderIndexHelper = true
 itemIconSize = 32
+version = 1
