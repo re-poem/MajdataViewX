@@ -180,14 +180,13 @@ namespace MajdataViewX.Managers
 
         public void ReportMeterBpm(ReadOnlySpan<char> fumen, ReadOnlySpan<SimaiTiming> timings)
         {
-            meterList.Clear();
+            meterList = FumenHelper.ParseSignature(fumen);
+                
             bpmList.Clear();
-
             foreach (var timing in timings)
             {
-                meterList = FumenHelper.ParseSignature(fumen);
-
                 var lastBpm = bpmList.Count > 0 ? bpmList[^1].Bpm : 0;
+                // ReSharper disable once CompareOfFloatsByEqualityOperator
                 if (timing.Bpm != lastBpm)
                     bpmList.Add((timing.Time, timing.Bpm));
             }

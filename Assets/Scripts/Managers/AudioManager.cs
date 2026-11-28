@@ -9,6 +9,7 @@ using ManagedBass;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using MajdataViewX.Utils;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
@@ -97,7 +98,7 @@ namespace MajdataViewX.Managers
         {
             _audioManager = this;
             SfxRequestsPtr = (bool*)noteSfxPlaybackRequests.GetUnsafePtr();
-            MajEnv.InitBass(SAMPLE_RATE);
+            Bass.Init(-1, SAMPLE_RATE);
 
             //Note SFX
             var sfxPath = MajEnv.GetPath("SFX");
@@ -748,7 +749,7 @@ namespace MajdataViewX.Managers
 
         private float[] GetSampleDataFromFile(string path)
         {
-            var stream = Bass.CreateStream(path, 0, 0, BassFlags.Decode | BassFlags.Float);
+            var stream = BassHelper.CreateStream(path, 0, 0, BassFlags.Decode | BassFlags.Float);
             if (stream == 0) return Array.Empty<float>();
 
             var info = Bass.ChannelGetInfo(stream);

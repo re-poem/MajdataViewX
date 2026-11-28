@@ -171,6 +171,7 @@ namespace MajdataViewX.Managers
             while (State is ViewStatus.Busy)
                 await UniTask.Yield();
 
+            Debug.Log("Start Parse");
             var previousState = State;
             State = ViewStatus.Busy;
 
